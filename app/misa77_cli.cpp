@@ -422,7 +422,9 @@ namespace
            << unsigned(misa77::config::default_level)
            << "]\n"
               "                      0 = faster decompression, 1 = better ratio,\n"
-              "                      2 = best ratio (slow compression, good decode speed)\n\n"
+              "                      2 = best ratio (slow compression, good decode speed),\n"
+              "                      3 = large-window format: wins on big inputs\n"
+              "                          (slow compression, good decode speed)\n\n"
               "EXPERIMENTAL COMPRESS MODES (use at most one; not combinable with --level)\n"
               "      --adaptive      autotune the codec for decode speed\n"
               "      --yolo          similar results to adaptive, lesser overhead\n"

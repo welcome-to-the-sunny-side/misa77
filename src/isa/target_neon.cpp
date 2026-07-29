@@ -5,14 +5,15 @@
 // Baseline for AArch64 (NEON/AdvSIMD support is guaranteed in the ISA).
 
 #include "compress_dispatch.h"
-#include "compressor_zoo/default_compress_impl.h"
-#include "compressor_zoo/heavy_compress_impl.h"
-#include "compressor_zoo/loose_compress_impl.h"
+#include "compressor_zoo/heavy_optimal_cimpl.h"
+#include "compressor_zoo/light_loose_cimpl.h"
+#include "compressor_zoo/light_medium_cimpl.h"
+#include "compressor_zoo/light_optimal_cimpl.h"
 #include "decompress_dispatch.h"
-#include "decompressor_zoo/heavy_safe_decompress_impl.h"
-#include "decompressor_zoo/heavy_unsafe_decompress_impl.h"
-#include "decompressor_zoo/safe_decompress_impl.h"
-#include "decompressor_zoo/unsafe_decompress_impl.h"
+#include "decompressor_zoo/heavy_safe_dimpl.h"
+#include "decompressor_zoo/heavy_unsafe_dimpl.h"
+#include "decompressor_zoo/safe_dimpl.h"
+#include "decompressor_zoo/unsafe_dimpl.h"
 #include "isa/lib_neon.h"
 
 #include <cstdint>
@@ -26,11 +27,13 @@ namespace misa77
                            config cfg)
     {
         if (cfg.level == 0)
-            return loose_compress_impl<lib_neon>(src, src_size, dst, dst_cap);
+            return light_loose_cimpl<lib_neon>(src, src_size, dst, dst_cap);
         else if (cfg.level == 1)
-            return default_compress_impl<lib_neon>(src, src_size, dst, dst_cap);
+            return light_medium_cimpl<lib_neon>(src, src_size, dst, dst_cap);
         else if (cfg.level == 2)
-            return heavy_compress_impl<lib_neon>(src, src_size, dst, dst_cap);
+            return light_optimal_cimpl<lib_neon>(src, src_size, dst, dst_cap);
+        else if (cfg.level == 3)
+            return heavy_optimal_cimpl<lib_neon>(src, src_size, dst, dst_cap);
         return 0;
     }
 
@@ -44,13 +47,13 @@ namespace misa77
         {
             // heavy
             if (dcfg.safe)
-                return heavy_safe_decompress_impl<lib_neon>(src, src_size, dst, dst_cap);
-            return heavy_unsafe_decompress_impl<lib_neon>(src, src_size, dst, dst_cap);
+                return heavy_safe_dimpl<lib_neon>(src, src_size, dst, dst_cap);
+            return heavy_unsafe_dimpl<lib_neon>(src, src_size, dst, dst_cap);
         }
 
         // light
         if (dcfg.safe)
-            return safe_decompress_impl<lib_neon>(src, src_size, dst, dst_cap);
-        return unsafe_decompress_impl<lib_neon>(src, src_size, dst, dst_cap);
+            return safe_dimpl<lib_neon>(src, src_size, dst, dst_cap);
+        return unsafe_dimpl<lib_neon>(src, src_size, dst, dst_cap);
     }
 } // namespace misa77

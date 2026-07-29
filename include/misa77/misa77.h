@@ -28,12 +28,12 @@ namespace misa77
     {
     public:
         // Only integers in [0, max_level] are valid levels
-        static constexpr uint8_t max_level = 2;
+        static constexpr uint8_t max_level = 3;
         static constexpr uint8_t default_level = 1;
         static_assert(default_level <= max_level);
 
         // Light levels in [0, heavy_lb), heavy levels in [heavy_lb, max_level]
-        static constexpr uint8_t heavy_lb = 2;
+        static constexpr uint8_t heavy_lb = 3;
 
         uint8_t level;
         config() : level(default_level) {}

@@ -22,6 +22,7 @@ namespace fmt
     constexpr size_t hashtab_lag = 32;   // min match distance the encoder emits
     constexpr size_t dis_lim = 1u << 16; // 65536; emitted dis must fit a uint16_t
     constexpr size_t vector_width = 32;  // cyccpy's unconditional store width
+    constexpr uint8_t heavy_mask = 0x01; // flags byte (offset 7): bit clear = light, set = heavy
 } // namespace fmt
 
 namespace
@@ -87,6 +88,21 @@ namespace
         if (misa77::decompressed_size(compressed.data()) != input.size())
         {
             std::fprintf(stderr, "[%s] FAIL: decompressed_size header wrong\n", name);
+            return false;
+        }
+
+        // --- Format routing ---------------------------------------------------
+        // The stream's flags byte must sit on the level's side of heavy_lb: light
+        // below it, heavy at or above. Levels < heavy_lb being light is what
+        // entitles them to the safe-accept branch below.
+        const bool stream_heavy = (compressed[7] & fmt::heavy_mask) != 0;
+        if (stream_heavy != (cfg.level >= misa77::config::heavy_lb))
+        {
+            std::fprintf(stderr,
+                         "[%s] FAIL: stream format (%s) does not match level %u\n",
+                         name,
+                         stream_heavy ? "heavy" : "light",
+                         unsigned(cfg.level));
             return false;
         }
 

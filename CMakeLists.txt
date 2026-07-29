@@ -22,14 +22,15 @@ add_library(misa77
     src/format.h
     src/util.h
     src/suffix/sais.h
-    src/decompressor_zoo/unsafe_decompress_impl.h
-    src/decompressor_zoo/safe_decompress_impl.h
-    src/decompressor_zoo/heavy_unsafe_decompress_impl.h
-    src/decompressor_zoo/heavy_safe_decompress_impl.h
+    src/decompressor_zoo/unsafe_dimpl.h
+    src/decompressor_zoo/safe_dimpl.h
+    src/decompressor_zoo/heavy_unsafe_dimpl.h
+    src/decompressor_zoo/heavy_safe_dimpl.h
     src/decompress_dispatch.h
-    src/compressor_zoo/default_compress_impl.h
-    src/compressor_zoo/loose_compress_impl.h
-    src/compressor_zoo/heavy_compress_impl.h
+    src/compressor_zoo/light_loose_cimpl.h
+    src/compressor_zoo/light_medium_cimpl.h
+    src/compressor_zoo/light_optimal_cimpl.h
+    src/compressor_zoo/heavy_optimal_cimpl.h
     src/compress_dispatch.h
     src/compress.cpp
     src/decompress.cpp
