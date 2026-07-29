@@ -12,16 +12,16 @@ In addition, misa77 has a somewhat synergizing tendency to decompress highly com
 
 misa77 has three compression effort levels as of v0.5.0:
 
-- level 0: offers better decode throughput, slightly worse ratio, similar encode throughput
-- level 1 (default): offers slightly worse decode throughput, better ratio, similar encode throughput
-- level 2: offers similar decode throughput to level 1, the best ratio (slightly better than `lz4hc -12`), very low encode throughput
+- level 0: offers the fastest decode throughput, slightly worse ratio, medium encode throughput.
+- level 1 (default): offers slightly worse decode throughput, better ratio, medium encode throughput.
+- level 2: offers similar decode throughput to level 1, the best ratio (slightly better than `lz4hc -12`), very low encode throughput.
 
 There are two decompressor modes:
 
 - unsafe: passing invalid input to this mode is UB.
 - safe: guaranteed to exit gracefully (ie. provably terminate, and not access out-of-bounds memory or engage in any other UB) in the case of corrupt/malicious input, is 2-4% slower than unsafe.
 
-Note: as of now, level 2 doesn't have a safe decompressor. It will be added soon.
+Note: As of now, level 2 doesn't have a safe decompressor. It will be added soon.
 
 ## Benchmarks
 
@@ -37,7 +37,7 @@ Let's first see some cross-platform results for the [Silesia Corpus](https://sun
 Note:
 
 1. "Ratio" ahead is equal to `((compressed size)/(original)) * 100` (so lower is better).
-2. The benchmarking harness is a public fork of lzbench, and can be accessed [here](https://github.com/welcome-to-the-sunny-side/lzbench/tree/add-misa77-0.4.0).
+2. misa77 has been merged into [lzbench](https://github.com/inikep/lzbench/) and [TurboBench](https://github.com/powturbo/TurboBench). The results below have been produced using lzbench, and can be reproduced through both benchmarking harnesses.
 3. In the tables ahead, rows are sorted by decompression speed.
 
 ---
@@ -215,7 +215,7 @@ misa compress --params data.misap data.bin
 
 ## Documentation
 
-The underlying stream format (used by the library functions) and the container format for `.misa77` files (produced by the CLI) can be found in [`docs/`](docs/).
+The underlying stream formats (used by the library functions) and the container format for `.misa77` files (produced by the CLI) can be found in [`docs/`](docs/).
 
 ## Status
 
@@ -232,7 +232,11 @@ Inspiration has been taken from:
 - [zxc](https://github.com/hellobertrand/zxc)
 - [lizard](https://github.com/inikep/lizard)
 
-Lastly, Claude Fable 5 and Opus 4.8 helped a *lot* with orchestrating experiments, scripting, tooling, and building the CLI. Without their assistance, development would have been far slower, and I would likely not have explored all the paths that I did end up exploring (some of which were productive and some of which weren't).
+Lastly, the following models helped a *lot* with orchestrating experiments, scripting, tooling, and building the CLI. Without their assistance, development would have been far slower, and I would likely not have explored all the paths that I did end up exploring (some of which were productive and some of which weren't).
+
+- Claude Fable 5
+- Claude Opus 5
+- Claude Opus 4.8
 
 ## License
 
