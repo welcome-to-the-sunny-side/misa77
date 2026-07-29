@@ -384,13 +384,14 @@ namespace
 
     misa77::config parse_level(std::string_view s)
     {
-        unsigned lvl = 0;
+        int lvl = 0;
         const auto res = std::from_chars(s.data(), s.data() + s.size(), lvl);
         if (res.ec != std::errc() || res.ptr != s.data() + s.size() ||
-            lvl > misa77::config::max_level)
-            die("invalid --level value '" + std::string(s) + "' (want an integer in [0, " +
-                std::to_string(unsigned(misa77::config::max_level)) + "])");
-        return misa77::config(static_cast<uint8_t>(lvl));
+            lvl < misa77::config::min_level || lvl > misa77::config::max_level)
+            die("invalid --level value '" + std::string(s) + "' (want an integer in [" +
+                std::to_string(int(misa77::config::min_level)) + ", " +
+                std::to_string(int(misa77::config::max_level)) + "])");
+        return misa77::config(static_cast<int8_t>(lvl));
     }
 
     uint8_t parse_tune(std::string_view s)
@@ -417,13 +418,14 @@ namespace
               "  -f, --force         overwrite the output without asking\n"
               "  -v, --verbose       report sizes, ratio and timing (to stderr)\n\n"
               "COMPRESS OPTIONS\n"
-              "  -l, --level N       compression level, 0.."
-           << unsigned(misa77::config::max_level) << "                  [default "
-           << unsigned(misa77::config::default_level)
+              "  -l, --level N       compression level, "
+           << int(misa77::config::min_level) << ".." << int(misa77::config::max_level)
+           << "                 [default " << int(misa77::config::default_level)
            << "]\n"
-              "                      0 = faster decompression, 1 = better ratio,\n"
-              "                      2 = best ratio (slow compression, good decode speed),\n"
-              "                      3 = large-window format: wins on big inputs\n"
+              "                      -1 = fastest compression, 0 = fast compression,\n"
+              "                      1 = faster decompression, 2 = better ratio,\n"
+              "                      3 = best ratio (slow compression, good decode speed),\n"
+              "                      4 = large-window format: wins on big inputs\n"
               "                          (slow compression, good decode speed)\n\n"
               "EXPERIMENTAL COMPRESS MODES (use at most one; not combinable with --level)\n"
               "      --adaptive      autotune the codec for decode speed\n"

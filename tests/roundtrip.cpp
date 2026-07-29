@@ -99,10 +99,10 @@ namespace
         if (stream_heavy != (cfg.level >= misa77::config::heavy_lb))
         {
             std::fprintf(stderr,
-                         "[%s] FAIL: stream format (%s) does not match level %u\n",
+                         "[%s] FAIL: stream format (%s) does not match level %d\n",
                          name,
                          stream_heavy ? "heavy" : "light",
-                         unsigned(cfg.level));
+                         int(cfg.level));
             return false;
         }
 
@@ -201,10 +201,10 @@ namespace
     bool run_one(const std::vector<uint8_t>& input, const char* name, Stats& stats)
     {
         bool ok = true;
-        for (uint8_t level = 0; level <= misa77::config::max_level; ++level)
+        for (int8_t level = misa77::config::min_level; level <= misa77::config::max_level; ++level)
         {
             char lname[96];
-            std::snprintf(lname, sizeof(lname), "%s@L%u", name, unsigned(level));
+            std::snprintf(lname, sizeof(lname), "%s@L%d", name, int(level));
             ok = run_one_with(input,
                               lname,
                               stats,

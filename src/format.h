@@ -15,7 +15,7 @@ namespace misa77
     // formats.
     inline constexpr uint64_t vector_width = 32;
 
-    // light format, used by levels in [0, config::heavy_lb)
+    // light format, used by levels in [config::min_level, config::heavy_lb)
     namespace light
     {
         // (`raw file size <= small_lim`) => small mode, we just write the raw bytes.
