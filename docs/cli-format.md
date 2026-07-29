@@ -12,17 +12,5 @@ A `.misa77` file is a 6-byte container header followed by the raw compression st
 ```
 
 - `magic`: identifies the file and lets the tool reject input that is trivially non-misa77. Note that the internal decompress primitive does not perform any validation on the raw compressed stream, so this check only exists to gracefully handle cases where someone accidentally tries to decompress a non-`.misa77` file with `misa`.
-- `version`: it is the container version ID. A build only decodes containers whose version it recognizes (currently `1` and `2`), anything else is rejected. The version describes the payload's stream format: `1` = light (levels -1..3 and the experimental modes), `2` = heavy (level 4). Older builds that only know version `1` therefore reject heavy files gracefully instead of misdecoding them. Readers may, but need not, cross-check the container version against the stream's own flags byte (the library's decompressor routes by the stream, not the container).
+- `version`: it is the container version ID. A build only decodes containers whose version it recognizes (currently `1` and `2`), anything else is rejected. The version describes the payload's stream format: `1` = light (levels -1..3), `2` = heavy (level 4). Older builds that only know version `1` therefore reject heavy files gracefully instead of misdecoding them. Readers may, but need not, cross-check the container version against the stream's own flags byte (the library's decompressor routes by the stream, not the container).
 - `flags`: currently `0`, to be used in the future.
-
-## Parameter file (`.misap`)
-
-`misa suggest` writes a `.misap` file holding one tuned parameter vector, which `misa compress --params FILE.misap` reads back. It is a single line of space-separated unsigned integers:
-
-```text
-<schema> <use_default> <size> <block> <short4_7> <short8_15> <lit7> <lit17> <lit33>
-```
-
-- `schema` is the format version (currently `1`); a file with a different schema is rejected.
-- `use_default` is `0` or `1`.
-- The remaining seven fields are the tuning weights in the `param` object passed to `misa77::experimental::compress_tuned`, in the order above.

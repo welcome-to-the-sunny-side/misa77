@@ -1,0 +1,275 @@
+| Compressor name       | Compression | Decompress. | Compr. size |  Ratio | Filename        |
+| --------------------- | ----------- | ----------- | ----------- | ------ | --------------- |
+| lz4 1.10.0            |    882 MB/s |   5195 MB/s |   100885763 |  47.59 | silesia.tar     |
+| misa77 0.6.0 --1      |    541 MB/s |   9739 MB/s |    99081047 |  46.74 | silesia.tar     |
+| misa77 0.6.0 -0       |    385 MB/s |  11777 MB/s |    94533882 |  44.60 | silesia.tar     |
+| misa77 0.6.0 -1       |    135 MB/s |  12638 MB/s |    90391854 |  42.64 | silesia.tar     |
+| misa77 0.6.0 -2       |    103 MB/s |  10868 MB/s |    85482759 |  40.33 | silesia.tar     |
+| misa77 0.6.0 -3       |   19.5 MB/s |  10280 MB/s |    80033817 |  37.76 | silesia.tar     |
+| misa77 0.6.0 -4       |   13.5 MB/s |   9925 MB/s |    75264012 |  35.51 | silesia.tar     |
+| misa77 0.6.0 safe --1 |    540 MB/s |   9513 MB/s |    99081047 |  46.74 | silesia.tar     |
+| misa77 0.6.0 safe -0  |    385 MB/s |  11592 MB/s |    94533882 |  44.60 | silesia.tar     |
+| misa77 0.6.0 safe -1  |    135 MB/s |  12490 MB/s |    90391854 |  42.64 | silesia.tar     |
+| misa77 0.6.0 safe -2  |    103 MB/s |  10711 MB/s |    85482759 |  40.33 | silesia.tar     |
+| misa77 0.6.0 safe -3  |   19.6 MB/s |  10132 MB/s |    80033817 |  37.76 | silesia.tar     |
+| lz4hc 1.10.0 -9       |   53.0 MB/s |   4899 MB/s |    77888133 |  36.74 | silesia.tar     |
+| lz4hc 1.10.0 -12      |   17.0 MB/s |   4887 MB/s |    77266281 |  36.45 | silesia.tar     |
+| snappy 1.2.2          |    967 MB/s |   3439 MB/s |   101554602 |  47.91 | silesia.tar     |
+| zxc 0.13.1 -3         |    278 MB/s |   8022 MB/s |    97023091 |  45.77 | silesia.tar     |
+| zxc 0.13.1 -4         |    193 MB/s |   7642 MB/s |    91571976 |  43.20 | silesia.tar     |
+| zxc 0.13.1 -5         |    114 MB/s |   7162 MB/s |    85426576 |  40.30 | silesia.tar     |
+| zstd 1.5.7 -1         |    722 MB/s |   1615 MB/s |    73220865 |  34.54 | silesia.tar     |
+| lzav 5.16 -1          |    770 MB/s |   4348 MB/s |    84579682 |  39.90 | silesia.tar     |
+| lzav 5.16 -2          |    185 MB/s |   4243 MB/s |    73874760 |  34.85 | silesia.tar     |
+| lz4 1.10.0            |    642 MB/s |   4337 MB/s |    20139988 |  48.58 | silesia/webster |
+| misa77 0.6.0 --1      |    403 MB/s |   9424 MB/s |    18359653 |  44.28 | silesia/webster |
+| misa77 0.6.0 -0       |    280 MB/s |  12307 MB/s |    16675110 |  40.22 | silesia/webster |
+| misa77 0.6.0 -1       |    125 MB/s |  13129 MB/s |    16130530 |  38.91 | silesia/webster |
+| misa77 0.6.0 -2       |    101 MB/s |  12671 MB/s |    15269606 |  36.83 | silesia/webster |
+| misa77 0.6.0 -3       |   20.1 MB/s |  11237 MB/s |    13765027 |  33.20 | silesia/webster |
+| misa77 0.6.0 -4       |   14.6 MB/s |   9265 MB/s |    12898901 |  31.11 | silesia/webster |
+| misa77 0.6.0 safe --1 |    403 MB/s |   9020 MB/s |    18359653 |  44.28 | silesia/webster |
+| misa77 0.6.0 safe -0  |    280 MB/s |  12139 MB/s |    16675110 |  40.22 | silesia/webster |
+| misa77 0.6.0 safe -1  |    125 MB/s |  12915 MB/s |    16130530 |  38.91 | silesia/webster |
+| misa77 0.6.0 safe -2  |   98.1 MB/s |  12261 MB/s |    15269606 |  36.83 | silesia/webster |
+| misa77 0.6.0 safe -3  |   19.8 MB/s |  10957 MB/s |    13765027 |  33.20 | silesia/webster |
+| lz4hc 1.10.0 -9       |   43.4 MB/s |   3990 MB/s |    14001448 |  33.77 | silesia/webster |
+| lz4hc 1.10.0 -12      |   21.1 MB/s |   3961 MB/s |    13823143 |  33.34 | silesia/webster |
+| snappy 1.2.2          |    688 MB/s |   2775 MB/s |    19984210 |  48.20 | silesia/webster |
+| zxc 0.13.1 -3         |    176 MB/s |   6554 MB/s |    17050225 |  41.13 | silesia/webster |
+| zxc 0.13.1 -4         |    132 MB/s |   6498 MB/s |    16781584 |  40.48 | silesia/webster |
+| zxc 0.13.1 -5         |   86.6 MB/s |   6344 MB/s |    15942227 |  38.45 | silesia/webster |
+| zstd 1.5.7 -1         |    560 MB/s |   1543 MB/s |    13661986 |  32.95 | silesia/webster |
+| lzav 5.16 -1          |    471 MB/s |   3469 MB/s |    14970031 |  36.11 | silesia/webster |
+| lzav 5.16 -2          |    133 MB/s |   3665 MB/s |    12458217 |  30.05 | silesia/webster |
+| lz4 1.10.0            |    945 MB/s |   5179 MB/s |    26435667 |  51.61 | silesia/mozilla |
+| misa77 0.6.0 --1      |    583 MB/s |   8080 MB/s |    26397739 |  51.54 | silesia/mozilla |
+| misa77 0.6.0 -0       |    419 MB/s |  10605 MB/s |    25537584 |  49.86 | silesia/mozilla |
+| misa77 0.6.0 -1       |    120 MB/s |  11192 MB/s |    24703870 |  48.23 | silesia/mozilla |
+| misa77 0.6.0 -2       |   99.5 MB/s |  10890 MB/s |    23673554 |  46.22 | silesia/mozilla |
+| misa77 0.6.0 -3       |   17.8 MB/s |  10611 MB/s |    22703379 |  44.32 | silesia/mozilla |
+| misa77 0.6.0 -4       |   13.3 MB/s |  10515 MB/s |    22645756 |  44.21 | silesia/mozilla |
+| misa77 0.6.0 safe --1 |    583 MB/s |   7913 MB/s |    26397739 |  51.54 | silesia/mozilla |
+| misa77 0.6.0 safe -0  |    419 MB/s |  10379 MB/s |    25537584 |  49.86 | silesia/mozilla |
+| misa77 0.6.0 safe -1  |    120 MB/s |  10956 MB/s |    24703870 |  48.23 | silesia/mozilla |
+| misa77 0.6.0 safe -2  |   99.5 MB/s |  10603 MB/s |    23673554 |  46.22 | silesia/mozilla |
+| misa77 0.6.0 safe -3  |   17.7 MB/s |  10355 MB/s |    22703379 |  44.32 | silesia/mozilla |
+| lz4hc 1.10.0 -9       |   60.6 MB/s |   5229 MB/s |    22078791 |  43.11 | silesia/mozilla |
+| lz4hc 1.10.0 -12      |   10.0 MB/s |   5235 MB/s |    22014250 |  42.98 | silesia/mozilla |
+| snappy 1.2.2          |    955 MB/s |   3116 MB/s |    26568762 |  51.87 | silesia/mozilla |
+| zxc 0.13.1 -3         |    262 MB/s |   6869 MB/s |    26803592 |  52.33 | silesia/mozilla |
+| zxc 0.13.1 -4         |    194 MB/s |   6622 MB/s |    25000669 |  48.81 | silesia/mozilla |
+| zxc 0.13.1 -5         |    118 MB/s |   6466 MB/s |    23728772 |  46.33 | silesia/mozilla |
+| zstd 1.5.7 -1         |    725 MB/s |   1442 MB/s |    19968503 |  38.99 | silesia/mozilla |
+| lzav 5.16 -1          |    814 MB/s |   3723 MB/s |    23791255 |  46.45 | silesia/mozilla |
+| lzav 5.16 -2          |    193 MB/s |   3714 MB/s |    21291648 |  41.57 | silesia/mozilla |
+| lz4 1.10.0            |    932 MB/s |   5270 MB/s |     5440937 |  54.57 | silesia/mr      |
+| misa77 0.6.0 --1      |    624 MB/s |   9045 MB/s |     5816870 |  58.34 | silesia/mr      |
+| misa77 0.6.0 -0       |    449 MB/s |  13071 MB/s |     5312835 |  53.29 | silesia/mr      |
+| misa77 0.6.0 -1       |    113 MB/s |  13624 MB/s |     5301136 |  53.17 | silesia/mr      |
+| misa77 0.6.0 -2       |   84.7 MB/s |   9419 MB/s |     4830830 |  48.45 | silesia/mr      |
+| misa77 0.6.0 -3       |   18.9 MB/s |   8630 MB/s |     4435859 |  44.49 | silesia/mr      |
+| misa77 0.6.0 -4       |   12.9 MB/s |   9066 MB/s |     4204420 |  42.17 | silesia/mr      |
+| misa77 0.6.0 safe --1 |    624 MB/s |   8865 MB/s |     5816870 |  58.34 | silesia/mr      |
+| misa77 0.6.0 safe -0  |    450 MB/s |  12763 MB/s |     5312835 |  53.29 | silesia/mr      |
+| misa77 0.6.0 safe -1  |    113 MB/s |  13306 MB/s |     5301136 |  53.17 | silesia/mr      |
+| misa77 0.6.0 safe -2  |   84.7 MB/s |   9287 MB/s |     4830830 |  48.45 | silesia/mr      |
+| misa77 0.6.0 safe -3  |   18.8 MB/s |   8596 MB/s |     4435859 |  44.49 | silesia/mr      |
+| lz4hc 1.10.0 -9       |   31.1 MB/s |   4613 MB/s |     4245211 |  42.58 | silesia/mr      |
+| lz4hc 1.10.0 -12      |   12.8 MB/s |   4603 MB/s |     4189363 |  42.02 | silesia/mr      |
+| snappy 1.2.2          |    943 MB/s |   2546 MB/s |     5399507 |  54.15 | silesia/mr      |
+| zxc 0.13.1 -3         |    222 MB/s |   9566 MB/s |     4908330 |  49.23 | silesia/mr      |
+| zxc 0.13.1 -4         |    153 MB/s |   9522 MB/s |     4786383 |  48.01 | silesia/mr      |
+| zxc 0.13.1 -5         |    105 MB/s |   9218 MB/s |     4577653 |  45.91 | silesia/mr      |
+| zstd 1.5.7 -1         |    664 MB/s |   1575 MB/s |     3813409 |  38.25 | silesia/mr      |
+| lzav 5.16 -1          |    702 MB/s |   4180 MB/s |     4650604 |  46.64 | silesia/mr      |
+| lzav 5.16 -2          |    152 MB/s |   3770 MB/s |     4186314 |  41.99 | silesia/mr      |
+| lz4 1.10.0            |    582 MB/s |   4120 MB/s |     6428742 |  63.07 | silesia/dickens |
+| misa77 0.6.0 --1      |    313 MB/s |   9272 MB/s |     5937040 |  58.25 | silesia/dickens |
+| misa77 0.6.0 -0       |    216 MB/s |  11290 MB/s |     5207389 |  51.09 | silesia/dickens |
+| misa77 0.6.0 -1       |    104 MB/s |  11960 MB/s |     5207945 |  51.10 | silesia/dickens |
+| misa77 0.6.0 -2       |   79.9 MB/s |  11026 MB/s |     4836078 |  47.45 | silesia/dickens |
+| misa77 0.6.0 -3       |   19.8 MB/s |   9498 MB/s |     4378961 |  42.96 | silesia/dickens |
+| misa77 0.6.0 -4       |   14.7 MB/s |   8622 MB/s |     4138278 |  40.60 | silesia/dickens |
+| misa77 0.6.0 safe --1 |    313 MB/s |   8921 MB/s |     5937040 |  58.25 | silesia/dickens |
+| misa77 0.6.0 safe -0  |    216 MB/s |  11284 MB/s |     5207389 |  51.09 | silesia/dickens |
+| misa77 0.6.0 safe -1  |    104 MB/s |  11806 MB/s |     5207945 |  51.10 | silesia/dickens |
+| misa77 0.6.0 safe -2  |   80.0 MB/s |  10836 MB/s |     4836078 |  47.45 | silesia/dickens |
+| misa77 0.6.0 safe -3  |   19.8 MB/s |   9414 MB/s |     4378961 |  42.96 | silesia/dickens |
+| lz4hc 1.10.0 -9       |   33.0 MB/s |   3716 MB/s |     4432823 |  43.49 | silesia/dickens |
+| lz4hc 1.10.0 -12      |   18.7 MB/s |   3612 MB/s |     4376097 |  42.93 | silesia/dickens |
+| snappy 1.2.2          |    590 MB/s |   2083 MB/s |     6249045 |  61.31 | silesia/dickens |
+| zxc 0.13.1 -3         |    164 MB/s |   8666 MB/s |     5813174 |  57.03 | silesia/dickens |
+| zxc 0.13.1 -4         |    111 MB/s |   7982 MB/s |     5221630 |  51.23 | silesia/dickens |
+| zxc 0.13.1 -5         |   70.5 MB/s |   8125 MB/s |     4956392 |  48.63 | silesia/dickens |
+| zstd 1.5.7 -1         |    525 MB/s |   1377 MB/s |     4261734 |  41.81 | silesia/dickens |
+| lzav 5.16 -1          |    413 MB/s |   3081 MB/s |     4571036 |  44.85 | silesia/dickens |
+| lzav 5.16 -2          |    145 MB/s |   3969 MB/s |     3913764 |  38.40 | silesia/dickens |
+| lz4 1.10.0            |   3067 MB/s |  24140 MB/s |     8390195 |  99.01 | silesia/x-ray   |
+| misa77 0.6.0 --1      |   1235 MB/s |  30229 MB/s |     8429184 |  99.47 | silesia/x-ray   |
+| misa77 0.6.0 -0       |   1020 MB/s |  45055 MB/s |     8436476 |  99.55 | silesia/x-ray   |
+| misa77 0.6.0 -1       |    205 MB/s |  38798 MB/s |     8376906 |  98.85 | silesia/x-ray   |
+| misa77 0.6.0 -2       |   46.7 MB/s |   4378 MB/s |     7426465 |  87.64 | silesia/x-ray   |
+| misa77 0.6.0 -3       |   22.5 MB/s |   4180 MB/s |     7252919 |  85.59 | silesia/x-ray   |
+| misa77 0.6.0 -4       |   15.2 MB/s |   5385 MB/s |     6922700 |  81.69 | silesia/x-ray   |
+| misa77 0.6.0 safe --1 |   1226 MB/s |  29437 MB/s |     8429184 |  99.47 | silesia/x-ray   |
+| misa77 0.6.0 safe -0  |   1019 MB/s |  44251 MB/s |     8436476 |  99.55 | silesia/x-ray   |
+| misa77 0.6.0 safe -1  |    206 MB/s |  38308 MB/s |     8376906 |  98.85 | silesia/x-ray   |
+| misa77 0.6.0 safe -2  |   46.6 MB/s |   4294 MB/s |     7426465 |  87.64 | silesia/x-ray   |
+| misa77 0.6.0 safe -3  |   22.4 MB/s |   4105 MB/s |     7252919 |  85.59 | silesia/x-ray   |
+| lz4hc 1.10.0 -9       |   66.2 MB/s |   3824 MB/s |     7175001 |  84.67 | silesia/x-ray   |
+| lz4hc 1.10.0 -12      |   44.4 MB/s |   3771 MB/s |     7172970 |  84.64 | silesia/x-ray   |
+| snappy 1.2.2          |  19732 MB/s |  51541 MB/s |     8457853 |  99.81 | silesia/x-ray   |
+| zxc 0.13.1 -3         |  12080 MB/s |  84356 MB/s |     8474348 | 100.00 | silesia/x-ray   |
+| zxc 0.13.1 -4         |  12977 MB/s |  81320 MB/s |     8474338 | 100.00 | silesia/x-ray   |
+| zxc 0.13.1 -5         |   77.0 MB/s |   8315 MB/s |     7616482 |  89.88 | silesia/x-ray   |
+| zstd 1.5.7 -1         |    895 MB/s |   1343 MB/s |     6772118 |  79.91 | silesia/x-ray   |
+| lzav 5.16 -1          |  25589 MB/s |  48516 MB/s |     8473995 | 100.00 | silesia/x-ray   |
+| lzav 5.16 -2          |   95.7 MB/s |   2621 MB/s |     7145368 |  84.32 | silesia/x-ray   |
+| lz4 1.10.0            |    897 MB/s |   5070 MB/s |     4338918 |  70.53 | silesia/ooffice |
+| misa77 0.6.0 --1      |    561 MB/s |   5005 MB/s |     4377208 |  71.15 | silesia/ooffice |
+| misa77 0.6.0 -0       |    318 MB/s |   7836 MB/s |     4139559 |  67.29 | silesia/ooffice |
+| misa77 0.6.0 -1       |   73.1 MB/s |   9281 MB/s |     4057627 |  65.95 | silesia/ooffice |
+| misa77 0.6.0 -2       |   62.8 MB/s |   8917 MB/s |     3809483 |  61.92 | silesia/ooffice |
+| misa77 0.6.0 -3       |   18.8 MB/s |   8466 MB/s |     3631718 |  59.03 | silesia/ooffice |
+| misa77 0.6.0 -4       |   14.9 MB/s |   8869 MB/s |     3646223 |  59.27 | silesia/ooffice |
+| misa77 0.6.0 safe --1 |    560 MB/s |   4936 MB/s |     4377208 |  71.15 | silesia/ooffice |
+| misa77 0.6.0 safe -0  |    317 MB/s |   7600 MB/s |     4139559 |  67.29 | silesia/ooffice |
+| misa77 0.6.0 safe -1  |   73.0 MB/s |   9054 MB/s |     4057627 |  65.95 | silesia/ooffice |
+| misa77 0.6.0 safe -2  |   62.8 MB/s |   8735 MB/s |     3809483 |  61.92 | silesia/ooffice |
+| misa77 0.6.0 safe -3  |   18.8 MB/s |   8270 MB/s |     3631718 |  59.03 | silesia/ooffice |
+| lz4hc 1.10.0 -9       |   55.1 MB/s |   4294 MB/s |     3543764 |  57.60 | silesia/ooffice |
+| lz4hc 1.10.0 -12      |   25.2 MB/s |   4174 MB/s |     3535250 |  57.46 | silesia/ooffice |
+| snappy 1.2.2          |    758 MB/s |   2555 MB/s |     4290349 |  69.74 | silesia/ooffice |
+| zxc 0.13.1 -3         |    237 MB/s |  12737 MB/s |     4871085 |  79.18 | silesia/ooffice |
+| zxc 0.13.1 -4         |    112 MB/s |   7548 MB/s |     3984641 |  64.77 | silesia/ooffice |
+| zxc 0.13.1 -5         |   87.4 MB/s |   7573 MB/s |     3862608 |  62.78 | silesia/ooffice |
+| zstd 1.5.7 -1         |    674 MB/s |   1234 MB/s |     3593224 |  58.41 | silesia/ooffice |
+| lzav 5.16 -1          |    718 MB/s |   4281 MB/s |     4062791 |  66.04 | silesia/ooffice |
+| lzav 5.16 -2          |    143 MB/s |   3187 MB/s |     3549620 |  57.70 | silesia/ooffice |
+| lz4 1.10.0            |   1224 MB/s |   6209 MB/s |     1227495 |  22.96 | silesia/xml     |
+| misa77 0.6.0 --1      |    691 MB/s |  21513 MB/s |     1307347 |  24.46 | silesia/xml     |
+| misa77 0.6.0 -0       |    522 MB/s |  18777 MB/s |     1268929 |  23.74 | silesia/xml     |
+| misa77 0.6.0 -1       |    238 MB/s |  22916 MB/s |     1087784 |  20.35 | silesia/xml     |
+| misa77 0.6.0 -2       |    205 MB/s |  22629 MB/s |     1043730 |  19.53 | silesia/xml     |
+| misa77 0.6.0 -3       |   22.2 MB/s |  22202 MB/s |      948505 |  17.74 | silesia/xml     |
+| misa77 0.6.0 -4       |   13.9 MB/s |  18426 MB/s |      686811 |  12.85 | silesia/xml     |
+| misa77 0.6.0 safe --1 |    691 MB/s |  20174 MB/s |     1307347 |  24.46 | silesia/xml     |
+| misa77 0.6.0 safe -0  |    538 MB/s |  18578 MB/s |     1268929 |  23.74 | silesia/xml     |
+| misa77 0.6.0 safe -1  |    245 MB/s |  22669 MB/s |     1087784 |  20.35 | silesia/xml     |
+| misa77 0.6.0 safe -2  |    206 MB/s |  22099 MB/s |     1043730 |  19.53 | silesia/xml     |
+| misa77 0.6.0 safe -3  |   26.0 MB/s |  22187 MB/s |      948505 |  17.74 | silesia/xml     |
+| lz4hc 1.10.0 -9       |   95.4 MB/s |   8653 MB/s |      770055 |  14.41 | silesia/xml     |
+| lz4hc 1.10.0 -12      |   35.2 MB/s |   8496 MB/s |      759893 |  14.22 | silesia/xml     |
+| snappy 1.2.2          |   1436 MB/s |   5303 MB/s |     1299366 |  24.31 | silesia/xml     |
+| zxc 0.13.1 -3         |    435 MB/s |  10967 MB/s |     1011752 |  18.93 | silesia/xml     |
+| zxc 0.13.1 -4         |    325 MB/s |  11543 MB/s |      985654 |  18.44 | silesia/xml     |
+| zxc 0.13.1 -5         |    217 MB/s |  12632 MB/s |      896781 |  16.78 | silesia/xml     |
+| zstd 1.5.7 -1         |   1146 MB/s |   2796 MB/s |      693317 |  12.97 | silesia/xml     |
+| lzav 5.16 -1          |   1392 MB/s |   7879 MB/s |      888586 |  16.62 | silesia/xml     |
+| lzav 5.16 -2          |    384 MB/s |   9344 MB/s |      712189 |  13.32 | silesia/xml     |
+| lz4 1.10.0            |    921 MB/s |   5487 MB/s |     7716839 |  35.72 | silesia/samba   |
+| misa77 0.6.0 --1      |    570 MB/s |  13749 MB/s |     7829777 |  36.24 | silesia/samba   |
+| misa77 0.6.0 -0       |    429 MB/s |  15691 MB/s |     7428147 |  34.38 | silesia/samba   |
+| misa77 0.6.0 -1       |    171 MB/s |  16571 MB/s |     7128490 |  32.99 | silesia/samba   |
+| misa77 0.6.0 -2       |    148 MB/s |  16188 MB/s |     6819991 |  31.56 | silesia/samba   |
+| misa77 0.6.0 -3       |   19.5 MB/s |  15545 MB/s |     6442528 |  29.82 | silesia/samba   |
+| misa77 0.6.0 -4       |   13.8 MB/s |  12496 MB/s |     5972975 |  27.64 | silesia/samba   |
+| misa77 0.6.0 safe --1 |    566 MB/s |  13333 MB/s |     7829777 |  36.24 | silesia/samba   |
+| misa77 0.6.0 safe -0  |    429 MB/s |  15434 MB/s |     7428147 |  34.38 | silesia/samba   |
+| misa77 0.6.0 safe -1  |    171 MB/s |  16301 MB/s |     7128490 |  32.99 | silesia/samba   |
+| misa77 0.6.0 safe -2  |    148 MB/s |  16018 MB/s |     6819991 |  31.56 | silesia/samba   |
+| misa77 0.6.0 safe -3  |   19.2 MB/s |  15198 MB/s |     6442528 |  29.82 | silesia/samba   |
+| lz4hc 1.10.0 -9       |   75.2 MB/s |   5834 MB/s |     6139489 |  28.42 | silesia/samba   |
+| lz4hc 1.10.0 -12      |   17.2 MB/s |   5713 MB/s |     6095902 |  28.21 | silesia/samba   |
+| snappy 1.2.2          |   1113 MB/s |   4153 MB/s |     8014394 |  37.09 | silesia/samba   |
+| zxc 0.13.1 -3         |    341 MB/s |   8270 MB/s |     7476205 |  34.60 | silesia/samba   |
+| zxc 0.13.1 -4         |    259 MB/s |   8255 MB/s |     7037705 |  32.57 | silesia/samba   |
+| zxc 0.13.1 -5         |    168 MB/s |   8281 MB/s |     6733675 |  31.17 | silesia/samba   |
+| zstd 1.5.7 -1         |    806 MB/s |   2074 MB/s |     5487600 |  25.40 | silesia/samba   |
+| lzav 5.16 -1          |    913 MB/s |   5207 MB/s |     6192807 |  28.66 | silesia/samba   |
+| lzav 5.16 -2          |    258 MB/s |   5790 MB/s |     5473720 |  25.33 | silesia/samba   |
+| lz4 1.10.0            |   1513 MB/s |   7470 MB/s |     5533040 |  16.49 | silesia/nci     |
+| misa77 0.6.0 --1      |    877 MB/s |  18396 MB/s |     6825697 |  20.34 | silesia/nci     |
+| misa77 0.6.0 -0       |    704 MB/s |  16381 MB/s |     7382167 |  22.00 | silesia/nci     |
+| misa77 0.6.0 -1       |    317 MB/s |  20454 MB/s |     5591111 |  16.66 | silesia/nci     |
+| misa77 0.6.0 -2       |    265 MB/s |  21041 MB/s |     5447170 |  16.23 | silesia/nci     |
+| misa77 0.6.0 -3       |   19.9 MB/s |  19584 MB/s |     4544639 |  13.54 | silesia/nci     |
+| misa77 0.6.0 -4       |   12.1 MB/s |  17199 MB/s |     2907103 |   8.66 | silesia/nci     |
+| misa77 0.6.0 safe --1 |    875 MB/s |  18237 MB/s |     6825697 |  20.34 | silesia/nci     |
+| misa77 0.6.0 safe -0  |    703 MB/s |  16266 MB/s |     7382167 |  22.00 | silesia/nci     |
+| misa77 0.6.0 safe -1  |    317 MB/s |  20385 MB/s |     5591111 |  16.66 | silesia/nci     |
+| misa77 0.6.0 safe -2  |    265 MB/s |  20886 MB/s |     5447170 |  16.23 | silesia/nci     |
+| misa77 0.6.0 safe -3  |   19.9 MB/s |  19464 MB/s |     4544639 |  13.54 | silesia/nci     |
+| lz4hc 1.10.0 -9       |   69.8 MB/s |   9079 MB/s |     3673771 |  10.95 | silesia/nci     |
+| lz4hc 1.10.0 -12      |   25.3 MB/s |   8697 MB/s |     3617512 |  10.78 | silesia/nci     |
+| snappy 1.2.2          |   1852 MB/s |   6664 MB/s |     6121795 |  18.24 | silesia/nci     |
+| zxc 0.13.1 -3         |    579 MB/s |  11035 MB/s |     4837924 |  14.42 | silesia/nci     |
+| zxc 0.13.1 -4         |    419 MB/s |  11356 MB/s |     4762858 |  14.19 | silesia/nci     |
+| zxc 0.13.1 -5         |    265 MB/s |  11373 MB/s |     4378198 |  13.05 | silesia/nci     |
+| zstd 1.5.7 -1         |   1306 MB/s |   2877 MB/s |     2848578 |   8.49 | silesia/nci     |
+| lzav 5.16 -1          |   1685 MB/s |   8241 MB/s |     4263239 |  12.71 | silesia/nci     |
+| lzav 5.16 -2          |    391 MB/s |   9833 MB/s |     3320111 |   9.89 | silesia/nci     |
+| lz4 1.10.0            |   1070 MB/s |   7782 MB/s |     6790273 |  93.63 | silesia/sao     |
+| misa77 0.6.0 --1      |    579 MB/s |   6918 MB/s |     6450425 |  88.95 | silesia/sao     |
+| misa77 0.6.0 -0       |    300 MB/s |   7651 MB/s |     6116758 |  84.35 | silesia/sao     |
+| misa77 0.6.0 -1       |   62.0 MB/s |  12020 MB/s |     6179952 |  85.22 | silesia/sao     |
+| misa77 0.6.0 -2       |   50.5 MB/s |   7358 MB/s |     5927885 |  81.74 | silesia/sao     |
+| misa77 0.6.0 -3       |   20.1 MB/s |   7806 MB/s |     5839157 |  80.52 | silesia/sao     |
+| misa77 0.6.0 -4       |   15.4 MB/s |  10382 MB/s |     5711450 |  78.76 | silesia/sao     |
+| misa77 0.6.0 safe --1 |    580 MB/s |   6615 MB/s |     6450425 |  88.95 | silesia/sao     |
+| misa77 0.6.0 safe -0  |    300 MB/s |   7410 MB/s |     6116758 |  84.35 | silesia/sao     |
+| misa77 0.6.0 safe -1  |   59.0 MB/s |  11655 MB/s |     6179952 |  85.22 | silesia/sao     |
+| misa77 0.6.0 safe -2  |   50.6 MB/s |   7102 MB/s |     5927885 |  81.74 | silesia/sao     |
+| misa77 0.6.0 safe -3  |   19.7 MB/s |   7564 MB/s |     5839157 |  80.52 | silesia/sao     |
+| lz4hc 1.10.0 -9       |   42.3 MB/s |   3756 MB/s |     5735258 |  79.09 | silesia/sao     |
+| lz4hc 1.10.0 -12      |   25.4 MB/s |   4291 MB/s |     5668734 |  78.17 | silesia/sao     |
+| snappy 1.2.2          |    874 MB/s |   3144 MB/s |     6437634 |  88.77 | silesia/sao     |
+| zxc 0.13.1 -3         |  10719 MB/s |  69424 MB/s |     7249515 |  99.97 | silesia/sao     |
+| zxc 0.13.1 -4         |    197 MB/s |  18844 MB/s |     6788513 |  93.61 | silesia/sao     |
+| zxc 0.13.1 -5         |   67.1 MB/s |   7143 MB/s |     6036177 |  83.24 | silesia/sao     |
+| zstd 1.5.7 -1         |    698 MB/s |   1261 MB/s |     6250010 |  86.18 | silesia/sao     |
+| lzav 5.16 -1          |    676 MB/s |   4387 MB/s |     6265628 |  86.40 | silesia/sao     |
+| lzav 5.16 -2          |    142 MB/s |   4264 MB/s |     5776849 |  79.66 | silesia/sao     |
+| lz4 1.10.0            |    530 MB/s |   3635 MB/s |     3181387 |  48.00 | silesia/reymont |
+| misa77 0.6.0 --1      |    362 MB/s |  14514 MB/s |     2984065 |  45.03 | silesia/reymont |
+| misa77 0.6.0 -0       |    259 MB/s |  12957 MB/s |     2685641 |  40.52 | silesia/reymont |
+| misa77 0.6.0 -1       |    149 MB/s |  13816 MB/s |     2514389 |  37.94 | silesia/reymont |
+| misa77 0.6.0 -2       |    113 MB/s |  13546 MB/s |     2334745 |  35.23 | silesia/reymont |
+| misa77 0.6.0 -3       |   19.3 MB/s |  13117 MB/s |     2040416 |  30.79 | silesia/reymont |
+| misa77 0.6.0 -4       |   13.8 MB/s |  11258 MB/s |     1886366 |  28.46 | silesia/reymont |
+| misa77 0.6.0 safe --1 |    353 MB/s |  14020 MB/s |     2984065 |  45.03 | silesia/reymont |
+| misa77 0.6.0 safe -0  |    250 MB/s |  12687 MB/s |     2685641 |  40.52 | silesia/reymont |
+| misa77 0.6.0 safe -1  |    149 MB/s |  13629 MB/s |     2514389 |  37.94 | silesia/reymont |
+| misa77 0.6.0 safe -2  |    111 MB/s |  13128 MB/s |     2334745 |  35.23 | silesia/reymont |
+| misa77 0.6.0 safe -3  |   23.0 MB/s |  13150 MB/s |     2040416 |  30.79 | silesia/reymont |
+| lz4hc 1.10.0 -9       |   24.7 MB/s |   4601 MB/s |     2111095 |  31.85 | silesia/reymont |
+| lz4hc 1.10.0 -12      |   12.8 MB/s |   4613 MB/s |     2063052 |  31.13 | silesia/reymont |
+| snappy 1.2.2          |    709 MB/s |   2382 MB/s |     3204491 |  48.35 | silesia/reymont |
+| zxc 0.13.1 -3         |    192 MB/s |   8366 MB/s |     2703538 |  40.79 | silesia/reymont |
+| zxc 0.13.1 -4         |    141 MB/s |   8977 MB/s |     2596022 |  39.17 | silesia/reymont |
+| zxc 0.13.1 -5         |   66.0 MB/s |   9193 MB/s |     2380537 |  35.92 | silesia/reymont |
+| zstd 1.5.7 -1         |    482 MB/s |   1344 MB/s |     2149170 |  32.43 | silesia/reymont |
+| lzav 5.16 -1          |    521 MB/s |   3793 MB/s |     2421892 |  36.54 | silesia/reymont |
+| lzav 5.16 -2          |    188 MB/s |   4284 MB/s |     2076962 |  31.34 | silesia/reymont |
+| lz4 1.10.0            |    957 MB/s |   5285 MB/s |     5256666 |  52.12 | silesia/osdb    |
+| misa77 0.6.0 --1      |    691 MB/s |  11079 MB/s |     4358174 |  43.21 | silesia/osdb    |
+| misa77 0.6.0 -0       |    479 MB/s |  11939 MB/s |     4335395 |  42.99 | silesia/osdb    |
+| misa77 0.6.0 -1       |    117 MB/s |  11403 MB/s |     4105485 |  40.71 | silesia/osdb    |
+| misa77 0.6.0 -2       |    105 MB/s |  11751 MB/s |     4056799 |  40.22 | silesia/osdb    |
+| misa77 0.6.0 -3       |   20.4 MB/s |  11502 MB/s |     4045061 |  40.11 | silesia/osdb    |
+| misa77 0.6.0 -4       |   14.6 MB/s |  12887 MB/s |     3646510 |  36.16 | silesia/osdb    |
+| misa77 0.6.0 safe --1 |    673 MB/s |  10929 MB/s |     4358174 |  43.21 | silesia/osdb    |
+| misa77 0.6.0 safe -0  |    462 MB/s |  11787 MB/s |     4335395 |  42.99 | silesia/osdb    |
+| misa77 0.6.0 safe -1  |    113 MB/s |  11178 MB/s |     4105485 |  40.71 | silesia/osdb    |
+| misa77 0.6.0 safe -2  |    101 MB/s |  11522 MB/s |     4056799 |  40.22 | silesia/osdb    |
+| misa77 0.6.0 safe -3  |   20.5 MB/s |  11331 MB/s |     4045061 |  40.11 | silesia/osdb    |
+| lz4hc 1.10.0 -9       |   76.8 MB/s |   5617 MB/s |     3977505 |  39.44 | silesia/osdb    |
+| lz4hc 1.10.0 -12      |   38.4 MB/s |   5774 MB/s |     3946233 |  39.13 | silesia/osdb    |
+| snappy 1.2.2          |   1286 MB/s |   4523 MB/s |     5324851 |  52.80 | silesia/osdb    |
+| zxc 0.13.1 -3         |    373 MB/s |  16635 MB/s |     6598704 |  65.43 | silesia/osdb    |
+| zxc 0.13.1 -4         |    207 MB/s |  10484 MB/s |     4567995 |  45.29 | silesia/osdb    |
+| zxc 0.13.1 -5         |    130 MB/s |   9327 MB/s |     4207554 |  41.72 | silesia/osdb    |
+| zstd 1.5.7 -1         |    767 MB/s |   1662 MB/s |     3729819 |  36.98 | silesia/osdb    |
+| lzav 5.16 -1          |    869 MB/s |   5479 MB/s |     4023912 |  39.90 | silesia/osdb    |
+| lzav 5.16 -2          |    225 MB/s |   5891 MB/s |     3974980 |  39.41 | silesia/osdb    |

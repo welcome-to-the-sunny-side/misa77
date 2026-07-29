@@ -24,7 +24,8 @@ namespace misa77
         constexpr uint32_t hash_siz = 1 << hash_top;
         constexpr uint32_t hash_mul = 2654435761;
 
-        // Size of ring buffer per hash in the hashtable. Wider than other hashtable modes to lengthen matches, which improves ratio and decode (lesser tokens).
+        // Size of ring buffer per hash in the hashtable. Wider than other hashtable modes to
+        // lengthen matches, which improves ratio and decode (lesser tokens).
         inline constexpr uint64_t hashtab_wid = 20;
 
         // Hash 4 bytes to an integer in `[0, 1 << (hash_top))`.
@@ -55,7 +56,8 @@ namespace misa77
             ++dlpos;
         }
 
-        // A match must clear this bar to be taken on sight (shorter ones only get emitted through the fire rule below)
+        // A match must clear this bar to be taken on sight (shorter ones only get emitted through
+        // the fire rule below)
         constexpr uint64_t accept_len = 6;
         static_assert(accept_len >= min_match_len);
 
@@ -74,7 +76,9 @@ namespace misa77
 
         // Regime counter: an adaptive value in `[0, regime_cap]`
         // Emits with literal length `>= lit_lim` have a vote of `+3`, others `-1`
-        // Above the threshold the accept bar falls back to `min_match_len`: extras-heavy data needs its short matches, both for ratio and for the predictable token pattern the decoder's branches learn
+        // Above the threshold the accept bar falls back to `min_match_len`: extras-heavy data needs
+        // its short matches, both for ratio and for the predictable token pattern the decoder's
+        // branches learn
         inline constexpr int64_t regime_cap = 64;
         inline constexpr int64_t regime_threshold = 32;
 

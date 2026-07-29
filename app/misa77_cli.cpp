@@ -8,10 +8,9 @@
 // - Claude Opus 4.8
 // - Claude Fable 5
 //
-// Three file-based subcommands over the misa77 library codecs:
+// Two file-based subcommands over the misa77 library codecs:
 //   compress    FILE          -> FILE.misa77
 //   decompress  FILE.misa77   -> FILE
-//   suggest     FILE          -> FILE.misap   (tuned params; feed back into compress via --params)
 //
 // Compressed format: [4 byte magic "MSA7"][1 byte version][1 byte flags][raw compression stream]
 // Container version 1 = light-format payload, 2 = heavy-format payload (see docs/cli-format.md).
@@ -25,9 +24,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
-#include <misa77/experimental.h>
 #include <misa77/misa77.h>
 #include <string>
 #include <string_view>
@@ -35,12 +32,10 @@
 #include <sys/stat.h>
 #include <system_error>
 #include <unistd.h>
-#include <vector>
 
 namespace
 {
     namespace fs = std::filesystem;
-    using misa77::experimental::param;
 
     constexpr std::string_view VERSION_STR = MISA77_VERSION_STR;
 
@@ -52,16 +47,6 @@ namespace
     constexpr uint8_t VERSION_LIGHT = 1;
     constexpr uint8_t VERSION_HEAVY = 2;
     constexpr size_t HEADER_SIZE = 6; // 4 magic + 1 version + 1 flags
-    constexpr uint32_t PARAM_SCHEMA =
-        1; // .misap: schema + 8 param fields, space-separated on one line
-
-    enum class Mode
-    {
-        Fast,     // misa77::compress
-        Adaptive, // suggest on a sample, then compress_tuned
-        Yolo,     // fixed champion vector
-        Params    // compress_tuned with a .misap file
-    };
 
     [[noreturn]] void die(const std::string& msg)
     {
@@ -223,83 +208,14 @@ namespace
             die("input and output are the same file ('" + output + "')");
     }
 
-    // ---- .misap params ----
-
-    void write_params(const std::string& path, const param& p, bool force)
-    {
-        ensure_overwritable(path, force);
-        std::ofstream os(path, std::ios::trunc);
-        if (!os)
-            die("cannot create '" + path + "'");
-        os << PARAM_SCHEMA << ' ' << (p.use_default ? 1 : 0) << ' ' << p.size << ' ' << p.block
-           << ' ' << p.short4_7 << ' ' << p.short8_15 << ' ' << p.lit7 << ' ' << p.lit17 << ' '
-           << p.lit33 << '\n';
-        if (!os)
-            die("error writing '" + path + "'");
-    }
-
-    param read_params(const std::string& path)
-    {
-        std::ifstream is(path);
-        if (!is)
-            die("cannot open '" + path + "'");
-        uint32_t schema = 0;
-        if (!(is >> schema) || schema != PARAM_SCHEMA)
-            die("'" + path + "' is not a recognized .misap file");
-        param p;
-        int use_default = 0;
-        if (!(is >> use_default >> p.size >> p.block >> p.short4_7 >> p.short8_15 >> p.lit7 >>
-              p.lit17 >> p.lit33))
-            die("malformed .misap file '" + path + "'");
-        p.use_default = use_default != 0;
-        return p;
-    }
-
     // ---- codec actions ----
-
-    // Compress `in` into `dst` (capacity `cap`) using the selected mode. Returns the compressed
-    // size, or 0 on failure.
-    uint64_t run_codec(const uint8_t* in,
-                       uint64_t n,
-                       uint8_t* dst,
-                       uint64_t cap,
-                       Mode mode,
-                       misa77::config cfg,
-                       uint8_t option,
-                       uint64_t sample_bytes,
-                       const param* params_file)
-    {
-        switch (mode)
-        {
-            case Mode::Fast:
-                return misa77::compress(in, n, dst, cap, cfg);
-            case Mode::Yolo:
-                return misa77::experimental::yolo_compress(in, n, dst, cap);
-            case Mode::Params:
-                return misa77::experimental::compress_tuned(in, n, dst, cap, *params_file);
-            case Mode::Adaptive:
-            {
-                // adaptive_compress, but with a caller-controlled sample size: pick a param
-                // vector on a prefix, then compress the whole input with it.
-                const uint64_t sample = std::min(n, sample_bytes);
-                const param p =
-                    misa77::experimental::suggest_homogeneous(in, sample, dst, cap, option);
-                return misa77::experimental::compress_tuned(in, n, dst, cap, p);
-            }
-        }
-        return 0;
-    }
 
     // Returns the final output-file size; `codec_s` gets the library-call time alone.
     uint64_t compress_to(const uint8_t* in,
                          uint64_t n,
                          const std::string& outpath,
                          bool force,
-                         Mode mode,
                          misa77::config cfg,
-                         uint8_t option,
-                         uint64_t sample_bytes,
-                         const param* params_file,
                          double& codec_s)
     {
         ensure_overwritable(outpath, force);
@@ -308,22 +224,12 @@ namespace
 
         uint8_t* buf = out.data();
         std::memcpy(buf, MAGIC, 4);
-        // Only plain `compress` can select a heavy level; every experimental mode
-        // emits the light format.
-        const bool heavy = mode == Mode::Fast and cfg.level >= misa77::config::heavy_lb;
+        const bool heavy = cfg.level >= misa77::config::heavy_lb;
         buf[4] = heavy ? VERSION_HEAVY : VERSION_LIGHT;
         buf[5] = 0;
 
         const auto t0 = clk::now();
-        const uint64_t csz = run_codec(in,
-                                       n,
-                                       buf + HEADER_SIZE,
-                                       cap - HEADER_SIZE,
-                                       mode,
-                                       cfg,
-                                       option,
-                                       sample_bytes,
-                                       params_file);
+        const uint64_t csz = misa77::compress(in, n, buf + HEADER_SIZE, cap - HEADER_SIZE, cfg);
         codec_s = seconds_since(t0);
         if (csz == 0)
         {
@@ -373,15 +279,6 @@ namespace
 
     // ---- args ----
 
-    uint64_t parse_sample_mb(std::string_view s)
-    {
-        uint64_t mb = 0;
-        const auto res = std::from_chars(s.data(), s.data() + s.size(), mb);
-        if (res.ec != std::errc() || res.ptr != s.data() + s.size() || mb == 0)
-            die("invalid --sample value '" + std::string(s) + "' (want a positive integer, in MB)");
-        return mb << 20;
-    }
-
     misa77::config parse_level(std::string_view s)
     {
         int lvl = 0;
@@ -394,15 +291,6 @@ namespace
         return misa77::config(static_cast<int8_t>(lvl));
     }
 
-    uint8_t parse_tune(std::string_view s)
-    {
-        if (s == "loose")
-            return 0;
-        if (s == "tight")
-            return 1;
-        die("invalid --tune value '" + std::string(s) + "' (want 'loose' or 'tight')");
-    }
-
     [[noreturn]] void usage(int code)
     {
         std::ostream& os = code == 0 ? std::cout : std::cerr;
@@ -411,7 +299,6 @@ namespace
               "USAGE\n"
               "  misa compress    [OPTIONS] FILE     compress FILE -> FILE.misa77\n"
               "  misa decompress  [OPTIONS] FILE     decompress FILE (a .misa77) -> FILE\n"
-              "  misa suggest     [OPTIONS] FILE     write tuned params -> FILE.misap\n"
               "  misa help | misa version\n\n"
               "COMMON OPTIONS\n"
               "  -o, --output PATH   output path (default derived from FILE)\n"
@@ -426,15 +313,7 @@ namespace
               "                      1 = faster decompression, 2 = better ratio,\n"
               "                      3 = best ratio (slow compression, good decode speed),\n"
               "                      4 = large-window format: wins on big inputs\n"
-              "                          (slow compression, good decode speed)\n\n"
-              "EXPERIMENTAL COMPRESS MODES (use at most one; not combinable with --level)\n"
-              "      --adaptive      autotune the codec for decode speed\n"
-              "      --yolo          similar results to adaptive, lesser overhead\n"
-              "      --params PATH   compress with a .misap file from 'misa suggest'\n\n"
-              "TUNING (for --adaptive and suggest)\n"
-              "      --tune loose    larger decode gain, some ratio cost   [default]\n"
-              "      --tune tight    smaller decode gain, tiny ratio cost\n"
-              "      --sample MB     input sampled to pick params          [default 2]\n";
+              "                          (slow compression, good decode speed)\n";
         std::exit(code);
     }
 
@@ -455,26 +334,19 @@ namespace
         enum class Cmd
         {
             Compress,
-            Decompress,
-            Suggest
+            Decompress
         } which;
         if (cmd == "compress" || cmd == "c")
             which = Cmd::Compress;
         else if (cmd == "decompress" || cmd == "d" || cmd == "x")
             which = Cmd::Decompress;
-        else if (cmd == "suggest")
-            which = Cmd::Suggest;
         else
             die("unknown command '" + std::string(cmd) + "' (try: misa help)");
 
-        std::string input, output, params_path;
+        std::string input, output;
         bool have_input = false, have_output = false, force = false, verbose = false;
-        Mode mode = Mode::Fast;
         misa77::config cfg;
-        bool have_level = false, have_tune = false;
-        uint8_t option = 0;                 // 0 loose, 1 tight
-        uint64_t sample_bytes = 2ull << 20; // 2 MB
-        int mode_flags = 0;
+        bool have_level = false;
 
         for (int i = 2; i < argc; ++i)
         {
@@ -491,18 +363,8 @@ namespace
                 force = true;
             else if (s == "-v" || s == "--verbose")
                 verbose = true;
-            else if (s == "--adaptive")
-                mode = Mode::Adaptive, ++mode_flags;
-            else if (s == "--yolo")
-                mode = Mode::Yolo, ++mode_flags;
-            else if (s == "--params")
-                params_path = next(s), mode = Mode::Params, ++mode_flags;
             else if (s == "--level" || s == "-l")
                 cfg = parse_level(next(s)), have_level = true;
-            else if (s == "--tune")
-                option = parse_tune(next(s)), have_tune = true;
-            else if (s == "--sample")
-                sample_bytes = parse_sample_mb(next(s));
             else if (!s.empty() && s[0] == '-')
                 die("unknown option '" + std::string(s) + "'");
             else if (have_input)
@@ -514,48 +376,24 @@ namespace
         if (!have_input)
             die("missing input file (try: misa help)");
 
-        if (which == Cmd::Compress)
-        {
-            if (mode_flags > 1)
-                die("choose only one of --adaptive / --yolo / --params");
-        }
-        else if (mode_flags > 0)
-        {
-            die("--adaptive / --yolo / --params are compress-only options");
-        }
-
         // Flags that only mean something on one codec path are errors elsewhere: silently
         // ignoring an option the user typed hides a misunderstanding.
-        if (have_level && !(which == Cmd::Compress && mode == Mode::Fast))
-            die("--level applies only to plain 'misa compress' (no --adaptive/--yolo/--params)");
-        if (have_tune && !(which == Cmd::Suggest || mode == Mode::Adaptive))
-            die("--tune applies only to --adaptive and 'misa suggest'");
+        if (have_level && which != Cmd::Compress)
+            die("--level applies only to 'misa compress'");
 
         const auto t0 = clk::now();
         if (which == Cmd::Compress)
         {
             const Mapping in(input);
-            param pf;
-            const param* pfp = nullptr;
-            if (mode == Mode::Params)
-                pf = read_params(params_path), pfp = &pf;
             const std::string outpath = have_output ? output : input + ".misa77";
             reject_self_overwrite(input, outpath);
             double codec_s = 0;
-            const uint64_t out_bytes = compress_to(in.data(),
-                                                   in.size(),
-                                                   outpath,
-                                                   force,
-                                                   mode,
-                                                   cfg,
-                                                   option,
-                                                   sample_bytes,
-                                                   pfp,
-                                                   codec_s);
+            const uint64_t out_bytes =
+                compress_to(in.data(), in.size(), outpath, force, cfg, codec_s);
             if (verbose)
                 report(input, outpath, in.size(), out_bytes, in.size(), codec_s, seconds_since(t0));
         }
-        else if (which == Cmd::Decompress)
+        else // Decompress
         {
             const Mapping in(input);
             std::string outpath;
@@ -570,25 +408,6 @@ namespace
             const uint64_t out_bytes = decompress_to(in.data(), in.size(), outpath, force, codec_s);
             if (verbose)
                 report(input, outpath, in.size(), out_bytes, out_bytes, codec_s, seconds_since(t0));
-        }
-        else // Suggest
-        {
-            const Mapping in(input);
-            const uint64_t sample = std::min<uint64_t>(in.size(), sample_bytes);
-            std::vector<uint8_t> scratch(misa77::compress_bound(sample, misa77::config()));
-            const auto tc = clk::now();
-            const param p = misa77::experimental::suggest_homogeneous(
-                in.data(), sample, scratch.data(), scratch.size(), option);
-            const double codec_s = seconds_since(tc);
-            const std::string outpath = have_output ? output : input + ".misap";
-            reject_self_overwrite(input, outpath);
-            write_params(outpath, p, force);
-            if (verbose)
-                std::cerr << "misa: " << input << " -> " << outpath << '\n'
-                          << "misa: sampled " << with_commas(sample) << " bytes (tune "
-                          << (option == 0 ? "loose" : "tight") << ")\n"
-                          << "misa: codec " << fixed(codec_s, 3) << " s, total "
-                          << fixed(seconds_since(t0), 2) << " s\n";
         }
         return 0;
     }

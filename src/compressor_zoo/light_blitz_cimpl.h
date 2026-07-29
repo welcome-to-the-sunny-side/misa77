@@ -241,7 +241,9 @@ namespace misa77
                     uint64_t lit_cnt = pos - lit;
                     drpos -= lit_cnt;
 
-                    // Fixed 16-byte copy ending at the old drpos; bytes below the run only clobber not-yet-written literal space. The fire rule keeps runs short, so the branch is predictable.
+                    // Fixed 16-byte copy ending at the old drpos; bytes below the run only clobber
+                    // not-yet-written literal space. The fire rule keeps runs short, so the branch
+                    // is predictable.
                     if (lit_cnt <= 16) [[likely]]
                         memcpy(dst + drpos + lit_cnt - 16, src + lit + lit_cnt - 16, 16);
                     else
