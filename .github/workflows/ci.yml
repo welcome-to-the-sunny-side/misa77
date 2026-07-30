@@ -1,0 +1,45 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-gcc,       os: ubuntu-latest,    cc: gcc,   cxx: g++ }
+          - { name: linux-clang,     os: ubuntu-latest,    cc: clang, cxx: clang++ }
+          - { name: linux-arm-gcc,   os: ubuntu-24.04-arm, cc: gcc,   cxx: g++ }
+          - { name: linux-arm-clang, os: ubuntu-24.04-arm, cc: clang, cxx: clang++ }
+          - { name: macos,           os: macos-latest,     cc: clang, cxx: clang++ }
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  sanitizers:
+    name: linux-clang-asan-ubsan
+    runs-on: ubuntu-latest
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v5
+      - name: Configure
+        run: >
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all"
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
