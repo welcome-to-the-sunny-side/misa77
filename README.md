@@ -4,7 +4,7 @@ misa77 is an LZ-based codec that targets the write-once, read-many niche. In par
 
 - Extremely high decompression throughput (single-threaded).
 - Modest compression ratios (LZ4 at high effort levels is a good reference point).
-- Constant memory use during compression, regardless of input size (under 3 MB for levels -1 to 2, 29 MB for level 3, 176 MB for level 4). Decompression uses no extra memory.
+- Constant memory use during compression, regardless of input size. Decompression uses no extra memory.
 
 Slow compression is the obvious tradeoff that one makes to achieve the above.
 
@@ -230,6 +230,8 @@ Inspiration has been taken from:
 - [LZ4](http://github.com/lz4/lz4/)
 - [zxc](https://github.com/hellobertrand/zxc)
 - [lizard](https://github.com/inikep/lizard)
+- [m77rip](https://github.com/paddor/m77rip)
+- various people on encode.su
 
 Lastly, the following models helped a *lot* with orchestrating experiments, scripting, tooling, and building the CLI. Without their assistance, development would have been far slower, and I would likely not have explored all the paths that I did end up exploring (some of which were productive and some of which weren't).
 
