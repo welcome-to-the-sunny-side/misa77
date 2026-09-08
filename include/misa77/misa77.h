@@ -29,12 +29,14 @@ namespace misa77
     public:
         // Only integers in [min_level, max_level] are valid levels
         static constexpr int8_t min_level = -1;
-        static constexpr int8_t max_level = 4;
+        static constexpr int8_t max_level = 5;
         static constexpr int8_t default_level = 1;
         static_assert(min_level <= default_level and default_level <= max_level);
 
-        // Light levels in [min_level, heavy_lb), heavy levels in [heavy_lb, max_level]
+        // Light levels in [min_level, heavy_lb), heavy levels in [heavy_lb, compact_lb), compact
+        // levels in [compact_lb, max_level].
         static constexpr int8_t heavy_lb = 4;
+        static constexpr int8_t compact_lb = 5;
 
         int8_t level;
         config() : level(default_level) {}
@@ -60,7 +62,8 @@ namespace misa77
 
     // Returns number of bytes written to `dst`, and 0 on failure.
     // `cfg.level` selects the compressor to be used. Levels below `config::heavy_lb` emit the
-    // light format, levels at or above it emit the heavy format.
+    // light format, levels in [heavy_lb, compact_lb) emit the heavy format, and levels at or
+    // above compact_lb emit the compact format.
     // PRECONDITION: `src_size <= max_src_size` and
     // `config::min_level <= cfg.level <= config::max_level`
     uint64_t compress(const uint8_t* __restrict src,
