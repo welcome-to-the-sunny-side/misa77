@@ -11,6 +11,11 @@ namespace misa77
     // (bit at this pos = 0) => light format, otherwise heavy
     inline constexpr uint8_t format_bit = 0;
 
+    // (bit at this pos = 1) => compact format. Mutually exclusive with `format_bit`; both clear
+    // means light. Used by levels in [config::compact_lb, config::max_level].
+    inline constexpr uint8_t compact_bit = 2;
+    static_assert(compact_bit != format_bit);
+
     // Width in bytes of several unconditional operations we perform through isa libs in both
     // formats.
     inline constexpr uint64_t vector_width = 32;
@@ -165,4 +170,61 @@ namespace misa77
         // end
         static_assert(literal_suffix >= 2 * vector_width);
     } // namespace heavy
+
+    // compact format, used by levels in [config::compact_lb, config::max_level]
+    //
+    // The grammar is LZ4-inspired (short distances, variable token size) but keeps the light
+    // format's two-stream layout and unconditional-copy decode shape. Two token forms:
+    //
+    //   short (2 bytes): 0 LLL ll DD | dddddddd
+    //       L = match_len - 4 (3 bits, so 4..11), l = literal_len (2 bits, 0..2 direct, 3 = escape),
+    //       D|d = dis - 1 (10 bits, so dis 1..1024)
+    //   long  (3 bytes): 1 MMMMM ll | dddddddd dddddddd
+    //       M = match_len - 4 (5 bits, 0..28 -> 4..32; 29 = length extension, 30/31 reserved),
+    //       l = literal_len (same 2-bit encoding), d = dis - 1 (16 bits, so dis 1..65536)
+    //
+    // Literal and match length escapes are 255-stuffed and use `lit_lim` / `len_ext_base` as the
+    // base, exactly like the light format's literal-length escape.
+    namespace compact
+    {
+        inline constexpr uint32_t small_lim = 32;
+
+        inline constexpr uint32_t min_match_len = 4;
+
+        // Dense (exactly representable) match lengths.
+        inline constexpr uint32_t max_match_len = 32;
+
+        // Longest match the length extension can encode.
+        inline constexpr uint32_t max_long_match_len = 65536;
+
+        // The short token's coverage. Matches in here at a near distance cost 2 bytes.
+        inline constexpr uint32_t short_max_match_len = 11;
+        inline constexpr uint32_t short_max_dis = 1024;
+        static_assert(short_max_match_len <= max_match_len);
+        static_assert(short_max_dis == (uint32_t(1) << 10));
+
+        // Distances are stored as (dis - 1).
+        inline constexpr uint32_t min_dis = 1;
+        inline constexpr uint32_t max_dis = uint32_t(1) << 16;
+        static_assert(max_dis <= (uint32_t(1) << 16));
+
+        // Literal-length field is 2 bits in both token forms; the all-ones value is the escape.
+        inline constexpr uint64_t lit_lim = 3;
+        static_assert(lit_lim == (uint64_t(1) << 2) - 1);
+
+        // Long-token match-length code: 0..28 => len 4..32, 29 => extension, 30/31 reserved.
+        inline constexpr uint32_t len_ext_code = 29;
+        static_assert(max_match_len - min_match_len == len_ext_code - 1);
+
+        // First length that needs the extension.
+        inline constexpr uint32_t len_ext_base = max_match_len + 1;
+
+        // Same decode-side padding contract as the light format: the trailing literals absorb
+        // unconditional over-reads/over-writes and the source buffer provides over-read slack.
+        inline constexpr uint32_t literal_suffix = 32;
+        inline constexpr uint64_t dec_literal_copy = 16;
+        static_assert(literal_suffix >= vector_width);
+        static_assert(literal_suffix >= dec_literal_copy);
+        static_assert(max_long_match_len <= uint32_t(1) << 20);
+    } // namespace compact
 } // namespace misa77

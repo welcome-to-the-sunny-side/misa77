@@ -120,3 +120,40 @@ The bit at position `cond_bit` in the 8-th byte is a decoder performance hint. I
 Some constraints:
 
 - If copying a match involves copying range `[x, x + n)` to `[y, y + n)`, then we must have `hashtab_lag + 1 <= y - x <= hashtab_lag + ndis`.
+
+## Compact
+
+Constants referenced ahead are from namespace `compact` in [`src/format.h`](../src/format.h).
+
+The compact format targets compiled code and binaries: it allows short distances (down to 1) and
+long matches, at the cost of a slightly less uniform decode loop than the light format.
+
+- If `src_size <= small_lim` bytes, we simply write the raw source (after the 8-byte header).
+- Otherwise:
+    - The next 8 bytes contain `literal_suffix_cnt`, exactly as in the light format.
+    - The remaining bytes are the two streams (control forward, literals backward) followed by the
+      raw literal suffix, exactly as in the light format. Only the token grammar differs.
+    - Each token is either a **short** (2-byte) or **long** (3-byte) control sub-block, chosen by
+      the top bit of the first byte:
+        - Short: `0[L:3][l:2][D:2]` then one byte `d`.
+            - `L = match_len - 4`, so `match_len` is 4..11.
+            - `l` is the literal length (0..2 direct; 3 means an escape).
+            - `D:d` is `dis - 1` as a 10-bit value, so `dis` is 1..1024.
+        - Long: `1[M:5][l:2]` then two little-endian bytes `d`.
+            - `M = match_len - 4` for `match_len` in 4..32. `M = 29` means the match length is
+              escaped; 30 and 31 are reserved and must be rejected by a safe decoder.
+            - `l` is the literal length (same 2-bit encoding as the short form).
+            - `d` is `dis - 1` as a 16-bit value, so `dis` is 1..65536.
+    - Literal-length escape (`l = 3`): read bytes until the first value `< 255`; the literal length
+      is `3 + 255 * (number of 255-value bytes) + (final byte)`.
+    - Match-length escape (`M = 29`): read bytes until the first value `< 255`; the match length is
+      `33 + 255 * (number of 255-value bytes) + (final byte)`.
+    - When both escapes are present, the **match-length** escape is read first, then the
+      **literal-length** escape.
+
+Some constraints:
+
+- If copying a match involves copying range `[x, x + n)` to `[y, y + n)`, then we must have
+  `min_dis <= y - x <= max_dis`, i.e. `1 <= y - x <= 65536`. Matches may overlap their source
+  (`y - x < n`), in which case the copy repeats the `y - x` byte pattern.
+- The decoder must not assume `dis >= vector_width`; overlapping matches are legal.
