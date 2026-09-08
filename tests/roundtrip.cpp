@@ -23,6 +23,22 @@ namespace fmt
     constexpr size_t dis_lim = 1u << 16; // 65536; emitted dis must fit a uint16_t
     constexpr size_t vector_width = 32;  // cyccpy's unconditional store width
     constexpr uint8_t heavy_mask = 0x01; // flags byte (offset 7): bit clear = light, set = heavy
+    constexpr uint8_t compact_mask = 0x04; // flags byte: bit 2 set = compact
+
+    enum class Fmt
+    {
+        light,
+        heavy,
+        compact
+    };
+    inline Fmt fmt_of(int8_t level)
+    {
+        if (level >= misa77::config::compact_lb)
+            return Fmt::compact;
+        if (level >= misa77::config::heavy_lb)
+            return Fmt::heavy;
+        return Fmt::light;
+    }
 } // namespace fmt
 
 namespace
@@ -92,16 +108,20 @@ namespace
         }
 
         // --- Format routing ---------------------------------------------------
-        // The stream's flags byte must sit on the level's side of heavy_lb: light
-        // below it, heavy at or above. Levels < heavy_lb being light is what
-        // entitles them to the safe-accept branch below.
+        // The flags byte must match the format the level is documented to emit.
         const bool stream_heavy = (compressed[7] & fmt::heavy_mask) != 0;
-        if (stream_heavy != (cfg.level >= misa77::config::heavy_lb))
+        const bool stream_compact = (compressed[7] & fmt::compact_mask) != 0;
+        const fmt::Fmt want = fmt::fmt_of(cfg.level);
+        const bool fmt_ok = (want == fmt::Fmt::heavy and stream_heavy and !stream_compact) or
+                            (want == fmt::Fmt::compact and !stream_heavy and stream_compact) or
+                            (want == fmt::Fmt::light and !stream_heavy and !stream_compact);
+        if (!fmt_ok)
         {
             std::fprintf(stderr,
-                         "[%s] FAIL: stream format (%s) does not match level %d\n",
+                         "[%s] FAIL: stream flags (heavy=%d compact=%d) do not match level %d\n",
                          name,
-                         stream_heavy ? "heavy" : "light",
+                         int(stream_heavy),
+                         int(stream_compact),
                          int(cfg.level));
             return false;
         }
@@ -137,7 +157,7 @@ namespace
         // --- Safe decoder: same stream, same bytes, through the checked path ---
         // Heavy streams have no safe decoder yet (deliberately deferred until the format
         // freezes); the documented contract is that safe mode REJECTS them with 0. Pin that.
-        if (cfg.level >= misa77::config::heavy_lb)
+        if (want == fmt::Fmt::heavy)
         {
             std::vector<uint8_t> outs(dcap + kMargin, kCanary);
             const uint64_t rss = misa77::decompress(
@@ -357,6 +377,7 @@ int main(int argc, char** argv)
     // (65532..65568) where the uint16_t dis truncates if the encoder over-accepts.
     for (size_t dist : {size_t(16),        size_t(31),        size_t(32),        size_t(33),
                         size_t(100),       size_t(255),       size_t(256),       size_t(1000),
+                        size_t(1023),      size_t(1024),      size_t(1025),      size_t(2048),
                         size_t(32768),     size_t(60000),     size_t(65000),     size_t(65500),
                         size_t(65530),     size_t(65532),     size_t(65533),     size_t(65534),
                         fmt::dis_lim - 1,  fmt::dis_lim,      fmt::dis_lim + 1,  fmt::dis_lim + 4,

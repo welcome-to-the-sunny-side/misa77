@@ -14,6 +14,9 @@ namespace misa77
     // PRECONDITION: `src_size <= max_src_size`
     uint64_t compress_bound(uint64_t src_size, config cfg)
     {
+        if (cfg.level >= cfg.compact_lb)
+            // Worst case: every match covers the minimum 4 bytes and costs a 3-byte long token.
+            return uint64_t(8) + uint64_t(8) + 2 * src_size + uint64_t(64);
         if (cfg.level < cfg.heavy_lb)
             return uint64_t(8)   // uncompressed size
                    + uint64_t(8) // number of trailing raw literals (>= `literal_suffix`)

@@ -5,6 +5,7 @@
 // Baseline for AArch64 (NEON/AdvSIMD support is guaranteed in the ISA).
 
 #include "compress_dispatch.h"
+#include "compressor_zoo/compact_optimal_cimpl.h"
 #include "compressor_zoo/heavy_optimal_cimpl.h"
 #include "compressor_zoo/light_blitz_cimpl.h"
 #include "compressor_zoo/light_keen_cimpl.h"
@@ -12,6 +13,8 @@
 #include "compressor_zoo/light_optimal_cimpl.h"
 #include "compressor_zoo/light_swift_cimpl.h"
 #include "decompress_dispatch.h"
+#include "decompressor_zoo/compact_safe_dimpl.h"
+#include "decompressor_zoo/compact_unsafe_dimpl.h"
 #include "decompressor_zoo/heavy_safe_dimpl.h"
 #include "decompressor_zoo/heavy_unsafe_dimpl.h"
 #include "decompressor_zoo/light_safe_dimpl.h"
@@ -40,6 +43,8 @@ namespace misa77
             return light_optimal_cimpl<lib_neon>(src, src_size, dst, dst_cap);
         else if (cfg.level == 4)
             return heavy_optimal_cimpl<lib_neon>(src, src_size, dst, dst_cap);
+        else if (cfg.level == 5)
+            return compact_optimal_cimpl<lib_neon>(src, src_size, dst, dst_cap);
         return 0;
     }
 
@@ -49,6 +54,14 @@ namespace misa77
                              uint64_t dst_cap,
                              dconfig dcfg)
     {
+        if ((uint64_t(1) << compact_bit) & src[7])
+        {
+            // compact
+            if (dcfg.safe)
+                return compact_safe_dimpl<lib_neon>(src, src_size, dst, dst_cap);
+            return compact_unsafe_dimpl<lib_neon>(src, src_size, dst, dst_cap);
+        }
+
         if ((uint64_t(1) << format_bit) & src[7])
         {
             // heavy
