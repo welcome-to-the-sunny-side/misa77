@@ -46,6 +46,7 @@ namespace
     // gracefully on newer files instead of feeding an unknown stream to their decoder.
     constexpr uint8_t VERSION_LIGHT = 1;
     constexpr uint8_t VERSION_HEAVY = 2;
+    constexpr uint8_t VERSION_COMPACT = 3;
     constexpr size_t HEADER_SIZE = 6; // 4 magic + 1 version + 1 flags
 
     [[noreturn]] void die(const std::string& msg)
@@ -224,8 +225,9 @@ namespace
 
         uint8_t* buf = out.data();
         std::memcpy(buf, MAGIC, 4);
-        const bool heavy = cfg.level >= misa77::config::heavy_lb;
-        buf[4] = heavy ? VERSION_HEAVY : VERSION_LIGHT;
+        const bool compact = cfg.level >= misa77::config::compact_lb;
+        const bool heavy = !compact && cfg.level >= misa77::config::heavy_lb;
+        buf[4] = compact ? VERSION_COMPACT : (heavy ? VERSION_HEAVY : VERSION_LIGHT);
         buf[5] = 0;
 
         const auto t0 = clk::now();
@@ -248,10 +250,10 @@ namespace
             die("input is too small to be a misa77 file");
         if (std::memcmp(in, MAGIC, 4) != 0)
             die("not a misa77 file (bad magic)");
-        if (in[4] != VERSION_LIGHT and in[4] != VERSION_HEAVY)
+        if (in[4] != VERSION_LIGHT and in[4] != VERSION_HEAVY and in[4] != VERSION_COMPACT)
             die("unsupported misa77 version " + std::to_string(int(in[4])) +
                 " (this build reads v" + std::to_string(int(VERSION_LIGHT)) + "-v" +
-                std::to_string(int(VERSION_HEAVY)) + ")");
+                std::to_string(int(VERSION_COMPACT)) + ")");
         if (in[5] != 0)
             die("unsupported misa77 flags: " + std::to_string(int(in[5])));
 
@@ -313,7 +315,9 @@ namespace
               "                      1 = faster decompression, 2 = better ratio,\n"
               "                      3 = best ratio (slow compression, good decode speed),\n"
               "                      4 = large-window format: wins on big inputs\n"
-              "                          (slow compression, good decode speed)\n";
+              "                          (slow compression, good decode speed)\n"
+              "                      5 = compact format: short-distance matches and long\n"
+              "                          matches, best ratio on code/binaries\n";
         std::exit(code);
     }
 
