@@ -13,7 +13,7 @@
 //   decompress  FILE.misa77   -> FILE
 //
 // Compressed format: [4 byte magic "MSA7"][1 byte version][1 byte flags][raw compression stream]
-// Container version 1 = light-format payload, 2 = heavy-format payload (see docs/cli-format.md).
+// Container version 1 = light-format payload, 3 = heavy-format payload (see docs/cli-format.md).
 
 #include <algorithm>
 #include <cerrno>
@@ -41,11 +41,12 @@ namespace
 
     constexpr char MAGIC[4] = {'M', 'S', 'A', '7'};
     // The container version is the compatibility boundary: v1 wraps a light-format
-    // payload (readable by every misa build), v2 wraps a heavy-format payload
-    // (0.4.0+). A build rejects versions it does not know, so older tools fail
-    // gracefully on newer files instead of feeding an unknown stream to their decoder.
+    // payload (readable by every misa build), v3 wraps a heavy-format payload
+    // (0.7.0+). v2 was the heavy format of 0.4.0-0.6.0, which no longer exists.
+    // A build rejects versions it does not know, so older tools fail gracefully
+    // on newer files instead of feeding an unknown stream to their decoder.
     constexpr uint8_t VERSION_LIGHT = 1;
-    constexpr uint8_t VERSION_HEAVY = 2;
+    constexpr uint8_t VERSION_HEAVY = 3;
     constexpr size_t HEADER_SIZE = 6; // 4 magic + 1 version + 1 flags
 
     [[noreturn]] void die(const std::string& msg)
@@ -250,7 +251,7 @@ namespace
             die("not a misa77 file (bad magic)");
         if (in[4] != VERSION_LIGHT and in[4] != VERSION_HEAVY)
             die("unsupported misa77 version " + std::to_string(int(in[4])) +
-                " (this build reads v" + std::to_string(int(VERSION_LIGHT)) + "-v" +
+                " (this build reads v" + std::to_string(int(VERSION_LIGHT)) + " and v" +
                 std::to_string(int(VERSION_HEAVY)) + ")");
         if (in[5] != 0)
             die("unsupported misa77 flags: " + std::to_string(int(in[5])));
@@ -267,7 +268,9 @@ namespace
         ensure_overwritable(outpath, force);
         Mapping out(outpath, orig); // exact size, no finish() needed
         const auto t0 = clk::now();
-        const uint64_t r = misa77::decompress(payload, payload_size, out.data(), orig);
+        // safe mode: the file is untrusted input
+        const uint64_t r =
+            misa77::decompress(payload, payload_size, out.data(), orig, misa77::dconfig(true));
         codec_s = seconds_since(t0);
         if (r != orig)
         {

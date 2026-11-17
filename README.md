@@ -231,11 +231,13 @@ Inspiration has been taken from:
 - [zxc](https://github.com/hellobertrand/zxc)
 - [lizard](https://github.com/inikep/lizard)
 
-Lastly, the following models helped a *lot* with orchestrating experiments, scripting, tooling, and building the CLI. Without their assistance, development would have been far slower, and I would likely not have explored all the paths that I did end up exploring (some of which were productive and some of which weren't).
+Lastly, the following models helped a *lot* with every step of the process, including independently suggesting ideas/techniques that I wouldn't have thought of. Without their assistance, development would have been far slower, and I would likely not have explored all the paths that I did end up exploring (some of which were productive and some of which weren't).
 
+- Claude Opus 4.8
 - Claude Fable 5
 - Claude Opus 5
-- Claude Opus 4.8
+- Claude Opus 5.5
+- Claude Fable 5.2
 
 ## License
 

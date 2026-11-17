@@ -48,11 +48,11 @@ namespace misa77
                 // Write this unconditionally first, if it's wrong we'll just overwrite
                 dst[dlpos] = static_cast<uint8_t>(n);
 
-                constexpr uint64_t block = 255;
-                if (n >= block) [[unlikely]]
+                constexpr uint64_t ext_full = 255;
+                if (n >= ext_full) [[unlikely]]
                 {
-                    while (n >= block) [[unlikely]]
-                        dst[dlpos] = block, ++dlpos, n -= block;
+                    while (n >= ext_full) [[unlikely]]
+                        dst[dlpos] = ext_full, ++dlpos, n -= ext_full;
                     dst[dlpos] = static_cast<uint8_t>(n);
                 }
 
@@ -68,7 +68,7 @@ namespace misa77
             constexpr uint64_t inf = std::numeric_limits<uint64_t>::max();
 
             [[gnu::always_inline]]
-            // returns block cost - match length cost
+            // returns sequence cost - match length cost
             inline uint64_t l_cost(const uint32_t& lit_len, const param& given)
             {
                 uint64_t extra = (lit_len < 7) ? 0 : (lit_len - 7) / 255 + 1;
@@ -305,7 +305,7 @@ namespace misa77
                     uint64_t match_start = pos + (trans >> 16);
                     uint16_t match_length = trans ^ ((trans >> 16) << 16);
 
-                    // Incomplete block at the end in this region
+                    // Incomplete sequence at the end in this region
                     if (match_length == 0)
                         break;
 
