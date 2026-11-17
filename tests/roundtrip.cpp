@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Shreyas Ghildiyal <nonadhocproblems@gmail.com>
 
+#include "codebook.h"
+#include "compress_dispatch.h"
+#include "decompress_dispatch.h"
 #include "misa77/experimental.h"
 #include "misa77/misa77.h"
 
@@ -18,11 +21,20 @@
 // the format changes, the interesting boundary points below move with them).
 namespace fmt
 {
-    constexpr size_t small_lim = 32;     // <= this is stored raw
-    constexpr size_t hashtab_lag = 32;   // min match distance the encoder emits
-    constexpr size_t dis_lim = 1u << 16; // 65536; emitted dis must fit a uint16_t
-    constexpr size_t vector_width = 32;  // cyccpy's unconditional store width
-    constexpr uint8_t heavy_mask = 0x01; // flags byte (offset 7): bit clear = light, set = heavy
+    constexpr size_t small_lim = 32;      // <= this is stored raw
+    constexpr size_t hashtab_lag = 32;    // min match distance the encoder emits
+    constexpr size_t dis_lim = 1u << 16;  // 65536; emitted dis must fit a uint16_t
+    constexpr size_t vector_width = 32;   // cyccpy's unconditional store width
+    constexpr uint8_t format_mask = 0x03; // flags byte (offset 7): low 2 bits = format, 0 = light
+
+    // false while the new level 4 is being ported: heavy lanes are skipped
+    constexpr bool heavy_ported = true;
+
+    // heavy (level 4) stream layout, restated here so the test does not inherit a format.h slip
+    constexpr uint8_t heavy_flags_a = 0x01;
+    constexpr uint8_t heavy_flags_s = 0x05;
+    constexpr uint64_t heavy_min_dis = 33;
+    constexpr size_t heavy_literal_suffix = 32;
 } // namespace fmt
 
 namespace
@@ -95,7 +107,7 @@ namespace
         // The stream's flags byte must sit on the level's side of heavy_lb: light
         // below it, heavy at or above. Levels < heavy_lb being light is what
         // entitles them to the safe-accept branch below.
-        const bool stream_heavy = (compressed[7] & fmt::heavy_mask) != 0;
+        const bool stream_heavy = (compressed[7] & fmt::format_mask) != 0;
         if (stream_heavy != (cfg.level >= misa77::config::heavy_lb))
         {
             std::fprintf(stderr,
@@ -135,30 +147,6 @@ namespace
         }
 
         // --- Safe decoder: same stream, same bytes, through the checked path ---
-        // Heavy streams have no safe decoder yet (deliberately deferred until the format
-        // freezes); the documented contract is that safe mode REJECTS them with 0. Pin that.
-        if (cfg.level >= misa77::config::heavy_lb)
-        {
-            std::vector<uint8_t> outs(dcap + kMargin, kCanary);
-            const uint64_t rss = misa77::decompress(
-                compressed.data(), csz, outs.data(), dcap, misa77::dconfig(true));
-            if (rss != 0)
-            {
-                std::fprintf(stderr,
-                             "[%s] FAIL: safe decode of a heavy stream returned %llu, want 0 "
-                             "(unsupported must reject)\n",
-                             name,
-                             static_cast<unsigned long long>(rss));
-                return false;
-            }
-            if (!canary_intact(outs, dcap) or outs != std::vector<uint8_t>(dcap + kMargin, kCanary))
-            {
-                std::fprintf(
-                    stderr, "[%s] FAIL: safe decode of a heavy stream wrote to dst\n", name);
-                return false;
-            }
-        }
-        else
         {
             std::vector<uint8_t> outs(dcap + kMargin, kCanary);
             const uint64_t rss = misa77::decompress(
@@ -201,7 +189,9 @@ namespace
     bool run_one(const std::vector<uint8_t>& input, const char* name, Stats& stats)
     {
         bool ok = true;
-        for (int8_t level = misa77::config::min_level; level <= misa77::config::max_level; ++level)
+        const int8_t top_level =
+            fmt::heavy_ported ? misa77::config::max_level : int8_t(misa77::config::heavy_lb - 1);
+        for (int8_t level = misa77::config::min_level; level <= top_level; ++level)
         {
             char lname[96];
             std::snprintf(lname, sizeof(lname), "%s@L%d", name, int(level));
@@ -325,11 +315,339 @@ namespace
         v.resize(n);
         return v;
     }
+
+    // Assembles a valid heavy stream token by token, together with the output it must decode to.
+    // Covers codes and shapes the level-4 compressor may never emit.
+    struct heavy_builder
+    {
+        const misa77::heavy::entry* cb;
+        uint8_t flags;
+        std::vector<uint8_t> cmd, off, lit, body, out;
+        uint64_t rep = 0;
+        uint32_t seed = 12345;
+
+        heavy_builder(const misa77::heavy::entry* cb_, uint8_t flags_) : cb(cb_), flags(flags_) {}
+
+        uint8_t rnd()
+        {
+            seed = seed * 1664525u + 1013904223u;
+            return uint8_t(seed >> 24);
+        }
+
+        void literals(uint32_t n)
+        {
+            for (uint32_t i = 0; i < n; ++i)
+            {
+                const uint8_t b = rnd();
+                lit.push_back(b);
+                out.push_back(b);
+            }
+        }
+
+        // `dis` is only read for S / N / F; R reuses the last one. Returns false if the codebook
+        // has no such code.
+        bool tok(misa77::heavy::kind k, uint32_t nlit, uint32_t len, uint64_t dis = 0)
+        {
+            int c = -1;
+            for (int i = 0; i < int(misa77::heavy::codebook_size); ++i)
+                if (cb[i].k == k and cb[i].lit == nlit and cb[i].len == len)
+                    c = i;
+            if (c < 0)
+                return false;
+            cmd.push_back(uint8_t(c));
+            literals(nlit);
+            const uint32_t ob = misa77::heavy::offset_bytes(k);
+            if (ob > 0)
+            {
+                const uint64_t v = dis - fmt::heavy_min_dis;
+                for (uint32_t i = 0; i < ob; ++i)
+                    off.push_back(uint8_t(v >> (8 * i)));
+                rep = dis;
+            }
+            for (uint32_t i = 0; i < len; ++i)
+            {
+                const uint8_t b = out[out.size() - rep];
+                out.push_back(b);
+            }
+            return true;
+        }
+
+        void end_block(uint32_t trailing)
+        {
+            literals(trailing);
+            for (const size_t cnt : {cmd.size(), off.size(), lit.size()})
+                for (int i = 0; i < 3; ++i)
+                    body.push_back(uint8_t(cnt >> (8 * i)));
+            body.insert(body.end(), cmd.begin(), cmd.end());
+            body.insert(body.end(), off.begin(), off.end());
+            body.insert(body.end(), lit.begin(), lit.end());
+            cmd.clear(), off.clear(), lit.clear();
+        }
+
+        std::vector<uint8_t> stream() const
+        {
+            std::vector<uint8_t> s(8);
+            const uint64_t header = uint64_t(out.size()) | (uint64_t(flags) << 56);
+            for (int i = 0; i < 8; ++i)
+                s[size_t(i)] = uint8_t(header >> (8 * i));
+            s.insert(s.end(), body.begin(), body.end());
+            return s;
+        }
+    };
+
+    void check_heavy(const heavy_builder& b, bool built, const char* name, Stats& stats)
+    {
+        ++stats.total;
+        if (not built)
+        {
+            std::fprintf(stderr, "[heavy-handbuilt/%s] FAIL: codebook lacks a code\n", name);
+            return;
+        }
+        const std::vector<uint8_t> s = b.stream();
+        const size_t n = b.out.size();
+        std::vector<uint8_t> d(n + kMargin, kCanary);
+        const uint64_t r =
+            misa77::decompress(s.data(), s.size(), d.data(), n, misa77::dconfig(false));
+        if (r != n or not std::equal(b.out.begin(), b.out.end(), d.begin()) or
+            not canary_intact(d, n))
+        {
+            std::fprintf(stderr,
+                         "[heavy-handbuilt/%s] FAIL: returned %llu for n = %zu\n",
+                         name,
+                         static_cast<unsigned long long>(r),
+                         n);
+            return;
+        }
+        std::printf("[heavy-handbuilt/%s] OK (%zu bytes)\n", name, n);
+        ++stats.passed;
+
+        // the safe decoder agrees on the valid stream
+        ++stats.total;
+        std::fill(d.begin(), d.end(), kCanary);
+        const uint64_t rs =
+            misa77::decompress(s.data(), s.size(), d.data(), n, misa77::dconfig(true));
+        if (rs != n or not std::equal(b.out.begin(), b.out.end(), d.begin()) or
+            not canary_intact(d, n))
+        {
+            std::fprintf(stderr,
+                         "[heavy-handbuilt-safe/%s] FAIL: returned %llu for n = %zu\n",
+                         name,
+                         static_cast<unsigned long long>(rs),
+                         n);
+            return;
+        }
+        ++stats.passed;
+
+        // Corrupted and truncated copies: the safe decoder may accept or reject, but must stay
+        // inside both buffers. `m` is sized exactly so a sanitizer build sees any over-read.
+        ++stats.total;
+        uint32_t seed = 987654321u ^ uint32_t(n);
+        const auto rnd = [&seed]() -> uint32_t
+        {
+            seed = seed * 1664525u + 1013904223u;
+            return seed >> 8;
+        };
+        const int trials = n < 4096 ? 20000 : 1500;
+        for (int trial = 0; trial < trials; ++trial)
+        {
+            std::vector<uint8_t> m = s;
+            if (trial % 4 == 3)
+                m.resize(rnd() % s.size());
+            const int flips = m.empty() ? 0 : 1 + int(rnd() % 3);
+            for (int i = 0; i < flips; ++i)
+            {
+                // bias towards the headers and the command stream
+                const size_t pos =
+                    (rnd() % 2) ? rnd() % std::min<size_t>(m.size(), 64) : rnd() % m.size();
+                m[pos] = uint8_t(rnd());
+            }
+            std::fill(d.begin(), d.end(), kCanary);
+            const uint64_t rm =
+                misa77::decompress(m.data(), m.size(), d.data(), n, misa77::dconfig(true));
+            if (rm > n or not canary_intact(d, n))
+            {
+                std::fprintf(stderr,
+                             "[heavy-mutate/%s] FAIL: trial %d returned %llu, n = %zu\n",
+                             name,
+                             trial,
+                             static_cast<unsigned long long>(rm),
+                             n);
+                return;
+            }
+        }
+        std::printf("[heavy-mutate/%s] OK (%d trials)\n", name, trials);
+        ++stats.passed;
+    }
+
+    void run_heavy_handbuilt(Stats& stats)
+    {
+        using misa77::heavy::kind;
+        for (const bool small_table : {false, true})
+        {
+            const misa77::heavy::entry* cb =
+                small_table ? misa77::heavy::codebook_s : misa77::heavy::codebook_a;
+            const uint8_t flags = small_table ? fmt::heavy_flags_s : fmt::heavy_flags_a;
+            const char* tag = small_table ? "S" : "A";
+            char name[64];
+
+            {
+                heavy_builder b(cb, flags);
+                b.end_block(100);
+                std::snprintf(name, sizeof name, "%s/literal-only", tag);
+                check_heavy(b, true, name, stats);
+            }
+            {
+                // every kind, big literal and big repeat codes, first match at the minimum
+                // distance, exactly `literal_suffix` trailing literals
+                heavy_builder b(cb, flags);
+                bool ok = b.tok(kind::L, 64, 0) and b.tok(kind::N, 0, 10, 40) and
+                          b.tok(kind::S, 0, 5, fmt::heavy_min_dis) and b.tok(kind::R, 0, 16) and
+                          b.tok(kind::L, 4, 0) and b.tok(kind::N, 1, 5, 60) and
+                          b.tok(kind::R, 0, 64) and b.tok(kind::L, 32768, 0) and
+                          b.tok(kind::N, 0, 32, 30000) and b.tok(kind::S, 0, 4, 288);
+                if (not small_table)
+                    ok = ok and b.tok(kind::F, 0, 6, 32000);
+                ok = ok and b.tok(kind::R, 0, 65536);
+                b.end_block(uint32_t(fmt::heavy_literal_suffix));
+                std::snprintf(name, sizeof name, "%s/one-block", tag);
+                check_heavy(b, ok, name, stats);
+            }
+            {
+                // the repeat distance carries across blocks; a block with no trailing literals
+                heavy_builder b(cb, flags);
+                bool ok = b.tok(kind::L, 64, 0) and b.tok(kind::N, 0, 10, 40);
+                b.end_block(3);
+                ok = ok and b.tok(kind::R, 0, 16) and b.tok(kind::N, 1, 5, 50);
+                b.end_block(0);
+                ok = ok and b.tok(kind::L, 2, 0) and b.tok(kind::R, 0, 32);
+                b.end_block(33);
+                std::snprintf(name, sizeof name, "%s/three-blocks", tag);
+                check_heavy(b, ok, name, stats);
+            }
+        }
+    }
+
+    // --- Cross-ISA lane ------------------------------------------------------
+    // compress() / decompress() only ever run the best path the CPU supports, so
+    // the SSE2 and portable code would otherwise never execute here. This calls
+    // every ISA entry point the machine can run directly: each one's stream must
+    // decode to the input through every one's decoder, safe and unsafe.
+    struct isa_entry
+    {
+        const char* name;
+        uint64_t (*compress)(
+            const uint8_t* __restrict, uint64_t, uint8_t* __restrict, uint64_t, misa77::config);
+        uint64_t (*decompress)(
+            const uint8_t* __restrict, uint64_t, uint8_t* __restrict, uint64_t, misa77::dconfig);
+    };
+
+    std::vector<isa_entry> runnable_isas()
+    {
+        std::vector<isa_entry> v;
+#if defined(__x86_64__)
+        if (__builtin_cpu_supports("avx2"))
+            v.push_back({"avx2", misa77::compress_avx2, misa77::decompress_avx2});
+        v.push_back({"sse2", misa77::compress_sse2, misa77::decompress_sse2});
+#elif defined(__aarch64__)
+        v.push_back({"neon", misa77::compress_neon, misa77::decompress_neon});
+#endif
+        v.push_back({"portable", misa77::compress_portable, misa77::decompress_portable});
+        return v;
+    }
+
+    // Streams are byte-identical across the x86 paths and portable (measured, and
+    // pinned here). NEON has never been checked for that, so there it is only
+    // reported.
+#if defined(__aarch64__)
+    constexpr bool isa_identity_required = false;
+#else
+    constexpr bool isa_identity_required = true;
+#endif
+
+    void run_cross_isa_one(const std::vector<uint8_t>& input, const char* name, Stats& stats)
+    {
+        const std::vector<isa_entry> isas = runnable_isas();
+        const int8_t top =
+            fmt::heavy_ported ? misa77::config::max_level : int8_t(misa77::config::heavy_lb - 1);
+
+        for (int lvl = misa77::config::min_level; lvl <= top; ++lvl)
+        {
+            ++stats.total;
+            bool ok = true;
+            const misa77::config cfg{static_cast<int8_t>(lvl)};
+            const uint64_t bound = misa77::compress_bound(input.size(), cfg);
+
+            std::vector<std::vector<uint8_t>> streams;
+            for (const isa_entry& e : isas)
+            {
+                std::vector<uint8_t> c(bound + kMargin, kCanary);
+                const uint64_t n = e.compress(input.data(), input.size(), c.data(), bound, cfg);
+                if (n == 0 or n > bound or not canary_intact(c, bound))
+                {
+                    std::fprintf(
+                        stderr,
+                        "[cross-isa %s L%d] FAIL: %s compress returned %llu (bound %llu)\n",
+                        name,
+                        lvl,
+                        e.name,
+                        static_cast<unsigned long long>(n),
+                        static_cast<unsigned long long>(bound));
+                    ok = false;
+                }
+                c.resize(n <= bound ? n : 0);
+                streams.push_back(std::move(c));
+            }
+
+            for (size_t i = 1; i < streams.size(); ++i)
+                if (streams[i] != streams[0])
+                {
+                    std::fprintf(stderr,
+                                 "[cross-isa %s L%d] %s: %s and %s streams differ\n",
+                                 name,
+                                 lvl,
+                                 isa_identity_required ? "FAIL" : "note",
+                                 isas[0].name,
+                                 isas[i].name);
+                    ok = ok and not isa_identity_required;
+                }
+
+            for (size_t i = 0; i < streams.size() and ok; ++i)
+                for (const isa_entry& e : isas)
+                    for (const bool safe : {false, true})
+                    {
+                        std::vector<uint8_t> d(input.size() + kMargin, kCanary);
+                        const uint64_t r = e.decompress(streams[i].data(),
+                                                        streams[i].size(),
+                                                        d.data(),
+                                                        input.size(),
+                                                        misa77::dconfig(safe));
+                        if (r != input.size() or not canary_intact(d, input.size()) or
+                            not std::equal(input.begin(), input.end(), d.begin()))
+                        {
+                            std::fprintf(stderr,
+                                         "[cross-isa %s L%d] FAIL: %s stream through the %s %s "
+                                         "decoder returned %llu\n",
+                                         name,
+                                         lvl,
+                                         isas[i].name,
+                                         e.name,
+                                         safe ? "safe" : "unsafe",
+                                         static_cast<unsigned long long>(r));
+                            ok = false;
+                        }
+                    }
+
+            if (ok)
+                ++stats.passed;
+        }
+    }
 } // namespace
 
 int main(int argc, char** argv)
 {
     Stats stats;
+
+    run_heavy_handbuilt(stats);
 
     // --- Edge cases / small-mode boundary (<= small_lim is stored raw) ------
     run_one({}, "empty", stats);
@@ -499,6 +817,58 @@ int main(int argc, char** argv)
         const uint64_t csz = misa77::compress(raw.data(), raw.size(), cs.data(), cs.size());
         cs.resize(csz);
 
+        // Every flags byte with a non-light format id other than the two valid heavy ones is
+        // rejected untouched. A light stream relabelled as heavy is garbage: unsafe must not
+        // see it, safe must stay in bounds.
+        if (not fmt::heavy_ported)
+        {
+            ++stats.total;
+            bool ok = true;
+            const std::vector<uint8_t> clean(raw.size() + kMargin, kCanary);
+            std::vector<uint8_t> d = clean;
+            for (int flags = 1; flags < 256 and ok; ++flags)
+            {
+                if ((flags & fmt::format_mask) == 0)
+                    continue;
+                cs[7] = uint8_t(flags);
+                for (const bool safe : {false, true})
+                {
+                    const bool heavy_flags =
+                        flags == fmt::heavy_flags_a or flags == fmt::heavy_flags_s;
+                    if (heavy_flags and not safe)
+                        continue;
+                    const uint64_t r = misa77::decompress(
+                        cs.data(), csz, d.data(), raw.size(), misa77::dconfig(safe));
+                    if (heavy_flags)
+                    {
+                        if (r > raw.size() or not canary_intact(d, raw.size()))
+                        {
+                            std::fprintf(stderr, "[flags-gate] FAIL: flags 0x%02X\n", flags);
+                            ok = false;
+                        }
+                        d = clean;
+                        continue;
+                    }
+                    if (r != 0 or d != clean)
+                    {
+                        std::fprintf(stderr,
+                                     "[flags-gate] FAIL: flags 0x%02X %s decode returned %llu\n",
+                                     flags,
+                                     safe ? "safe" : "unsafe",
+                                     static_cast<unsigned long long>(r));
+                        ok = false;
+                        d = clean;
+                    }
+                }
+            }
+            cs[7] = 0;
+            if (ok)
+            {
+                std::printf("[flags-gate] OK\n");
+                ++stats.passed;
+            }
+        }
+
         expect_reject("empty", cs.data(), 0, raw.size());
         expect_reject("7-byte-header", cs.data(), 7, raw.size());
         expect_reject("dst-too-small", cs.data(), csz, raw.size() - 1);
@@ -562,6 +932,23 @@ int main(int argc, char** argv)
             }
         }
     }
+
+    // --- Every ISA entry point this machine can run --------------------------
+    // Sizes straddle small mode, the level-4 table switch, a level-4 block and
+    // its sort segment.
+    run_cross_isa_one({}, "empty", stats);
+    run_cross_isa_one({0x42}, "1-byte", stats);
+    run_cross_isa_one(random_vec(fmt::small_lim, 21), "small_lim-rand", stats);
+    run_cross_isa_one(random_vec(fmt::small_lim + 1, 21), "small_lim+1-rand", stats);
+    run_cross_isa_one(std::vector<uint8_t>(300, 'X'), "300-Xs", stats);
+    run_cross_isa_one(lz_friendly(50'000, 22), "50k-lz", stats);
+    run_cross_isa_one(lz_friendly(300'000, 23), "300k-lz", stats);
+    run_cross_isa_one(lz_friendly(2'500'000, 24), "2.5M-lz", stats);
+    run_cross_isa_one(random_vec(200'000, 25), "200k-prng", stats);
+    run_cross_isa_one(std::vector<uint8_t>(1'000'000, 'A'), "1M-As", stats);
+    run_cross_isa_one(force_distance(40), "dist=40", stats);
+    run_cross_isa_one(force_distance(fmt::dis_lim + 32), "dist=dis_lim+32", stats);
+    run_cross_isa_one(tiled(random_vec(4096, 26), 300), "tiled@4096-1.2M", stats);
 
     // --- Any file paths passed on the command line (e.g. corpora) -----------
     for (int i = 1; i < argc; ++i)

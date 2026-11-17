@@ -1,5 +1,14 @@
 cmake_minimum_required(VERSION 3.20)
-project(misa77 LANGUAGES CXX)
+
+# The version lives in the public header (so re-configure when it changes).
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS include/misa77/misa77.h)
+file(STRINGS include/misa77/misa77.h MISA77_VERSION_DEFINES
+     REGEX "#define MISA77_VERSION_(MAJOR|MINOR|PATCH) ")
+string(REGEX REPLACE "[^;]*_(MAJOR|MINOR|PATCH) +([0-9]+)[^;]*" "\\2"
+       MISA77_VERSION "${MISA77_VERSION_DEFINES}")
+string(REPLACE ";" "." MISA77_VERSION "${MISA77_VERSION}")
+
+project(misa77 VERSION ${MISA77_VERSION} LANGUAGES CXX)
 
 # compile_commands.json for clangd / IDE tooling.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -18,7 +27,11 @@ else()
 endif()
 set(MISA77_MARCH "${MISA77_MARCH_DEFAULT}" CACHE STRING "-march for the misa77 dispatchers/CLI")
 
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
 add_library(misa77
+    src/codebook.h
     src/format.h
     src/util.h
     src/suffix/sais.h
@@ -47,7 +60,11 @@ add_library(misa77
     src/experimental/ecompress.cpp
     src/experimental/isa/etarget_portable.cpp)
 
-target_include_directories(misa77 PUBLIC include)
+add_library(misa77::misa77 ALIAS misa77)
+
+target_include_directories(misa77 PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_include_directories(misa77 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_features(misa77 PUBLIC cxx_std_20)
 target_compile_options(misa77 PRIVATE -Wall -Wextra -Wpedantic)
@@ -81,17 +98,39 @@ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
         PROPERTIES COMPILE_OPTIONS "-march=armv8-a")
 endif()
 
-add_executable(misa77_cli app/misa77_cli.cpp)
-set_target_properties(misa77_cli PROPERTIES OUTPUT_NAME misa)
-target_link_libraries(misa77_cli PRIVATE misa77)
-if(MISA77_MARCH)
-    target_compile_options(misa77_cli PRIVATE -march=${MISA77_MARCH})
+option(MISA77_BUILD_CLI "Build the misa command-line tool" ON)
+if(MISA77_BUILD_CLI)
+    add_executable(misa77_cli app/misa77_cli.cpp)
+    set_target_properties(misa77_cli PROPERTIES OUTPUT_NAME misa)
+    target_link_libraries(misa77_cli PRIVATE misa77)
+    if(MISA77_MARCH)
+        target_compile_options(misa77_cli PRIVATE -march=${MISA77_MARCH})
+    endif()
+    install(TARGETS misa77_cli)
 endif()
+
+# Install rules, so that a consumer can do:
+#   find_package(misa77 CONFIG REQUIRED)
+#   target_link_libraries(app PRIVATE misa77::misa77)
+# misa77 has no dependencies, so the exported targets file is the whole package config.
+install(TARGETS misa77 EXPORT misa77Config)
+install(DIRECTORY include/misa77 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(EXPORT misa77Config
+        NAMESPACE misa77::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/misa77)
+# The formats are unstable before 1.0, so a request for 0.7 is not met by 0.8.
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/misa77ConfigVersion.cmake
+    COMPATIBILITY SameMinorVersion)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/misa77ConfigVersion.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/misa77)
 
 option(MISA77_BUILD_TESTS "Build misa77 tests" ON)
 if(MISA77_BUILD_TESTS)
     enable_testing()
     add_executable(misa77_roundtrip tests/roundtrip.cpp)
     target_link_libraries(misa77_roundtrip PRIVATE misa77)
+    # the hand-built level-4 streams need the codebooks
+    target_include_directories(misa77_roundtrip PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     add_test(NAME roundtrip COMMAND misa77_roundtrip)
 endif()
