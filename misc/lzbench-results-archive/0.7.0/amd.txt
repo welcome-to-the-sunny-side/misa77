@@ -1,0 +1,27 @@
+| Compressor name       | Compression | Decompress. | Compr. size | Ratio | Filename    |
+| --------------------- | ----------- | ----------- | ----------- | ----- | ----------- |
+| lz4 1.11.0            |    733 MB/s |   4789 MB/s |   100297666 | 47.32 | silesia.tar |
+| lz4hc 1.11.0 -9       |   37.0 MB/s |   4517 MB/s |    77884640 | 36.75 | silesia.tar |
+| lz4hc 1.11.0 -12      |   13.9 MB/s |   4689 MB/s |    77265958 | 36.45 | silesia.tar |
+| misa77 0.7.0 --1      |    403 MB/s |   6243 MB/s |    99075441 | 46.74 | silesia.tar |
+| misa77 0.7.0 -0       |    297 MB/s |   6939 MB/s |    94527702 | 44.60 | silesia.tar |
+| misa77 0.7.0 -1       |   89.7 MB/s |   7588 MB/s |    90386575 | 42.64 | silesia.tar |
+| misa77 0.7.0 -2       |   69.2 MB/s |   6873 MB/s |    85477870 | 40.33 | silesia.tar |
+| misa77 0.7.0 -3       |   18.1 MB/s |   6694 MB/s |    80029882 | 37.76 | silesia.tar |
+| misa77 0.7.0 -4       |   2.94 MB/s |   6392 MB/s |    68541515 | 32.34 | silesia.tar |
+| misa77 0.7.0 safe --1 |    402 MB/s |   6090 MB/s |    99075441 | 46.74 | silesia.tar |
+| misa77 0.7.0 safe -0  |    296 MB/s |   6825 MB/s |    94527702 | 44.60 | silesia.tar |
+| misa77 0.7.0 safe -1  |   90.5 MB/s |   7479 MB/s |    90386575 | 42.64 | silesia.tar |
+| misa77 0.7.0 safe -2  |   69.2 MB/s |   6730 MB/s |    85477870 | 40.33 | silesia.tar |
+| misa77 0.7.0 safe -3  |   18.0 MB/s |   6577 MB/s |    80029882 | 37.76 | silesia.tar |
+| misa77 0.7.0 safe -4  |   2.94 MB/s |   6195 MB/s |    68541515 | 32.34 | silesia.tar |
+| lzsse4fast 2019-04-18 |    323 MB/s |   4198 MB/s |    95928723 | 45.26 | silesia.tar |
+| lzsse8fast 2019-04-18 |    314 MB/s |   4424 MB/s |    94948546 | 44.80 | silesia.tar |
+| snappy 1.3.1          |    560 MB/s |   1448 MB/s |   101496045 | 47.89 | silesia.tar |
+| lzav 7.2 -1           |    556 MB/s |   3238 MB/s |    83147609 | 39.23 | silesia.tar |
+| lzav 7.2 -2           |    114 MB/s |   3006 MB/s |    73217424 | 34.54 | silesia.tar |
+| zxc 1.0.0 -3          |    222 MB/s |   5930 MB/s |    98752218 | 46.59 | silesia.tar |
+| zxc 1.0.0 -4          |    163 MB/s |   5577 MB/s |    92047329 | 43.43 | silesia.tar |
+| zxc 1.0.0 -5          |   95.0 MB/s |   5357 MB/s |    86495087 | 40.81 | silesia.tar |
+| zxc 1.0.0 -7          |   8.33 MB/s |   3665 MB/s |    70132312 | 33.09 | silesia.tar |
+| zstd 1.5.7 -1         |    488 MB/s |   1611 MB/s |    73215160 | 34.54 | silesia.tar |
