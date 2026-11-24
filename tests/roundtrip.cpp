@@ -149,8 +149,7 @@ namespace
         // --- Safe decoder: same stream, same bytes, through the checked path ---
         {
             std::vector<uint8_t> outs(dcap + kMargin, kCanary);
-            const uint64_t rss = misa77::decompress(
-                compressed.data(), csz, outs.data(), dcap, misa77::dconfig(true));
+            const uint64_t rss = misa77::decompress(compressed.data(), csz, outs.data(), dcap);
             if (rss != input.size())
             {
                 std::fprintf(stderr,
@@ -406,8 +405,7 @@ namespace
         const std::vector<uint8_t> s = b.stream();
         const size_t n = b.out.size();
         std::vector<uint8_t> d(n + kMargin, kCanary);
-        const uint64_t r =
-            misa77::decompress(s.data(), s.size(), d.data(), n, misa77::dconfig(false));
+        const uint64_t r = misa77::decompress(s.data(), s.size(), d.data(), n);
         if (r != n or not std::equal(b.out.begin(), b.out.end(), d.begin()) or
             not canary_intact(d, n))
         {
@@ -424,8 +422,7 @@ namespace
         // the safe decoder agrees on the valid stream
         ++stats.total;
         std::fill(d.begin(), d.end(), kCanary);
-        const uint64_t rs =
-            misa77::decompress(s.data(), s.size(), d.data(), n, misa77::dconfig(true));
+        const uint64_t rs = misa77::decompress(s.data(), s.size(), d.data(), n);
         if (rs != n or not std::equal(b.out.begin(), b.out.end(), d.begin()) or
             not canary_intact(d, n))
         {
@@ -462,8 +459,7 @@ namespace
                 m[pos] = uint8_t(rnd());
             }
             std::fill(d.begin(), d.end(), kCanary);
-            const uint64_t rm =
-                misa77::decompress(m.data(), m.size(), d.data(), n, misa77::dconfig(true));
+            const uint64_t rm = misa77::decompress(m.data(), m.size(), d.data(), n);
             if (rm > n or not canary_intact(d, n))
             {
                 std::fprintf(stderr,
@@ -531,14 +527,13 @@ namespace
     // compress() / decompress() only ever run the best path the CPU supports, so
     // the SSE2 and portable code would otherwise never execute here. This calls
     // every ISA entry point the machine can run directly: each one's stream must
-    // decode to the input through every one's decoder, safe and unsafe.
+    // decode to the input through every one's decoder.
     struct isa_entry
     {
         const char* name;
         uint64_t (*compress)(
             const uint8_t* __restrict, uint64_t, uint8_t* __restrict, uint64_t, misa77::config);
-        uint64_t (*decompress)(
-            const uint8_t* __restrict, uint64_t, uint8_t* __restrict, uint64_t, misa77::dconfig);
+        uint64_t (*decompress)(const uint8_t* __restrict, uint64_t, uint8_t* __restrict, uint64_t);
     };
 
     std::vector<isa_entry> runnable_isas()
@@ -613,14 +608,11 @@ namespace
 
             for (size_t i = 0; i < streams.size() and ok; ++i)
                 for (const isa_entry& e : isas)
-                    for (const bool safe : {false, true})
+                    for (const bool safe : {true}) // 0.8.0: safe is the only mode
                     {
                         std::vector<uint8_t> d(input.size() + kMargin, kCanary);
-                        const uint64_t r = e.decompress(streams[i].data(),
-                                                        streams[i].size(),
-                                                        d.data(),
-                                                        input.size(),
-                                                        misa77::dconfig(safe));
+                        const uint64_t r = e.decompress(
+                            streams[i].data(), streams[i].size(), d.data(), input.size());
                         if (r != input.size() or not canary_intact(d, input.size()) or
                             not std::equal(input.begin(), input.end(), d.begin()))
                         {
@@ -794,7 +786,7 @@ int main(int argc, char** argv)
         {
             ++stats.total;
             std::vector<uint8_t> d(cap + kMargin, kCanary);
-            const uint64_t r = misa77::decompress(s, n, d.data(), cap, misa77::dconfig(true));
+            const uint64_t r = misa77::decompress(s, n, d.data(), cap);
             if (r != 0)
             {
                 std::fprintf(stderr,
@@ -831,14 +823,13 @@ int main(int argc, char** argv)
                 if ((flags & fmt::format_mask) == 0)
                     continue;
                 cs[7] = uint8_t(flags);
-                for (const bool safe : {false, true})
+                for (const bool safe : {true}) // 0.8.0: safe is the only mode
                 {
                     const bool heavy_flags =
                         flags == fmt::heavy_flags_a or flags == fmt::heavy_flags_s;
                     if (heavy_flags and not safe)
                         continue;
-                    const uint64_t r = misa77::decompress(
-                        cs.data(), csz, d.data(), raw.size(), misa77::dconfig(safe));
+                    const uint64_t r = misa77::decompress(cs.data(), csz, d.data(), raw.size());
                     if (heavy_flags)
                     {
                         if (r > raw.size() or not canary_intact(d, raw.size()))
@@ -912,8 +903,7 @@ int main(int argc, char** argv)
             for (uint64_t pos = 16; pos < csz && ok; pos += csz / 256 + 1)
             {
                 cs[pos] ^= 0x5A;
-                const uint64_t r =
-                    misa77::decompress(cs.data(), csz, d.data(), raw.size(), misa77::dconfig(true));
+                const uint64_t r = misa77::decompress(cs.data(), csz, d.data(), raw.size());
                 if (r > raw.size() || !canary_intact(d, raw.size()))
                 {
                     std::fprintf(stderr,

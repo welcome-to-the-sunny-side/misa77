@@ -6,6 +6,7 @@
 
 #include "format.h"
 #include "util.h"
+#include "decompressor_zoo/heavy_safe_kernels/kernel.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -32,11 +33,28 @@ namespace misa77
             uint8_t* const out_lim = out_end - literal_suffix;
             uint64_t v = uint64_t(0) - min_dis;
 
+            heavy::kernel_io io;
+            bool use_kernel = false;
+            if constexpr (isa_lib::has_heavy_kernel)
+            {
+                io.src_end = src_end;
+                io.dst = dst;
+                io.out_lim = out_lim;
+                io.chk_end = reinterpret_cast<uintptr_t>(dst) + T.max_dis;
+                io.tables = &kernel_tables_for(T);
+                // the kernel's derived limits must not wrap
+                use_kernel = reinterpret_cast<uintptr_t>(src) >= kernel_min_addr and
+                             reinterpret_cast<uintptr_t>(dst) >= kernel_min_addr;
+            }
+
+            // process one block per iteration
             while (out < out_end)
             {
                 const uint64_t space = uint64_t(src_end - block);
                 if (space < block_header_size) [[unlikely]]
                     return 0;
+
+                // get the block header
 
                 // a 4-byte load of the last count could over-read by 1
                 const auto load_cnt = [](const uint8_t* ptr)
@@ -61,83 +79,109 @@ namespace misa77
                 const uint8_t* lp = op_end;
                 const uint8_t* const lp_end = lp + lit_cnt;
 
+                if constexpr (isa_lib::has_heavy_kernel)
+                    io.cp_end = cp_end, io.op_end = op_end, io.lp_end = lp_end;
+
+                // process one batch at a time
                 while (cp < cp_end)
                 {
-                    // The batch below only keeps `lp` and `op` inside the source, so they may
-                    // have crossed their own stream ends.
-                    if (lp > lp_end or op > op_end) [[unlikely]]
-                        return 0;
-
-                    // Number of small tokens that can run with no checks on the cursors:
-                    // each reads `<= dec_literal_copy` literal bytes, loads `offset_load` offset
-                    // bytes, and writes `<= max_small_out` bytes past `out`.
-                    uint64_t batch = uint64_t(cp_end - cp);
-                    batch = std::min(batch, uint64_t(src_end - lp) / dec_literal_copy);
-                    batch = std::min(batch, uint64_t(src_end - op) / offset_load);
-                    batch = std::min(batch,
-                                     out < out_lim ? uint64_t(out_lim - out) / max_small_out : 0);
-                    // No distance yet (`dis = 0`): the exact step rejects repeat matches until
-                    // then, so the batch never has to.
-                    if (v + min_dis == 0)
-                        batch = 0;
-
-                    const uint8_t* const batch_start = cp;
-                    const uint8_t* const batch_end = cp + batch;
-
-                    while (cp < batch_end)
+                    if constexpr (isa_lib::has_heavy_kernel)
                     {
-                        const uint64_t c = *cp;
-                        const uint64_t nb = T.nb[c];
-                        ++cp;
-
-                        // Big token: rounded copies as in the unsafe decoder, checked here, then a
-                        // new batch. The budget already covers its 4-byte offset load.
-                        if (nb & big_flag) [[unlikely]]
+                        if (use_kernel)
                         {
-                            const uint64_t lit = T.full_lit[c];
-                            const uint64_t len = T.full_len[c];
-                            const uint64_t lit_read =
-                                (lit + vector_width - 1) & ~(vector_width - 1);
-                            if (lit + len > uint64_t(out_lim - out) or
-                                lit_read > uint64_t(src_end - lp)) [[unlikely]]
+                            // runs tokens until the block ends (1) or one needs the exact step (2)
+                            io.cp = cp, io.op = op, io.lp = lp, io.out = out;
+                            io.vneg = uint64_t(0) - v;
+                            const uint64_t r = isa_lib::heavy_kernel(&io);
+                            if (r == 0) [[unlikely]]
                                 return 0;
+                            cp = io.cp, op = io.op, lp = io.lp, out = io.out;
+                            v = uint64_t(0) - io.vneg;
+                            if (r == 1)
+                                break;
+                        }
+                        else if (lp > lp_end or op > op_end) [[unlikely]]
+                            return 0;
+                    }
+                    else
+                    {
+                        // The batch below only keeps `lp` and `op` inside the source, so they may
+                        // have crossed their own stream ends.
+                        if (lp > lp_end or op > op_end) [[unlikely]]
+                            return 0;
 
-                            for (uint64_t i = 0; i < lit; i += vector_width)
-                                isa_lib::copy32(out + i, lp + i);
+                        // Number of small tokens that can run with no checks on the cursors:
+                        // each reads `<= dec_literal_copy` literal bytes, loads `offset_load` offset
+                        // bytes, and writes `<= max_small_out` bytes past `out`.
+                        uint64_t batch = uint64_t(cp_end - cp);
+                        batch = std::min(batch, uint64_t(src_end - lp) / dec_literal_copy);
+                        batch = std::min(batch, uint64_t(src_end - op) / offset_load);
+                        batch = std::min(batch,
+                                         out < out_lim ? uint64_t(out_lim - out) / max_small_out : 0);
+                        // No distance yet (`dis = 0`): the exact step rejects repeat matches until
+                        // then, so the batch never has to.
+                        if (v + min_dis == 0)
+                            batch = 0;
+
+                        const uint8_t* const batch_start = cp;
+                        const uint8_t* const batch_end = cp + batch;
+
+                        // process the tokens in this batch
+                        while (cp < batch_end)
+                        {
+                            const uint64_t c = *cp;
+                            const uint64_t nb = T.nb[c];
+                            ++cp;
+
+                            // Big token: rounded copies as in the unsafe decoder, checked here, then a
+                            // new batch. The budget already covers its 4-byte offset load.
+                            if (nb & big_flag) [[unlikely]]
+                            {
+                                const uint64_t lit = T.full_lit[c];
+                                const uint64_t len = T.full_len[c];
+                                const uint64_t lit_read =
+                                    (lit + vector_width - 1) & ~(vector_width - 1);
+                                if (lit + len > uint64_t(out_lim - out) or
+                                    lit_read > uint64_t(src_end - lp)) [[unlikely]]
+                                    return 0;
+
+                                for (uint64_t i = 0; i < lit; i += vector_width)
+                                    isa_lib::copy32(out + i, lp + i);
+                                out += lit, lp += lit;
+
+                                const uint32_t m = T.mask[c];
+                                v = (loadu4(op) & m) | (v & (m ? 0 : ~uint64_t(0)));
+                                op += nb ^ big_flag;
+
+                                const uint64_t dis = v + min_dis;
+                                if (dis > uint64_t(out - dst)) [[unlikely]]
+                                    return 0;
+                                for (uint64_t i = 0; i < len; i += vector_width)
+                                    isa_lib::copy32(out + i, out + i - dis);
+                                out += len;
+                                break;
+                            }
+
+                            memcpy(out, lp, dec_literal_copy);
+                            const uint64_t lit = T.lit[c];
                             out += lit, lp += lit;
 
                             const uint32_t m = T.mask[c];
                             v = (loadu4(op) & m) | (v & (m ? 0 : ~uint64_t(0)));
-                            op += nb ^ big_flag;
+                            op += nb;
 
+                            // the match source must not start before `dst`
                             const uint64_t dis = v + min_dis;
                             if (dis > uint64_t(out - dst)) [[unlikely]]
                                 return 0;
-                            for (uint64_t i = 0; i < len; i += vector_width)
-                                isa_lib::copy32(out + i, out + i - dis);
-                            out += len;
-                            break;
+
+                            isa_lib::cyccpy(out - dis, dis);
+                            out += T.len[c];
                         }
 
-                        memcpy(out, lp, dec_literal_copy);
-                        const uint64_t lit = T.lit[c];
-                        out += lit, lp += lit;
-
-                        const uint32_t m = T.mask[c];
-                        v = (loadu4(op) & m) | (v & (m ? 0 : ~uint64_t(0)));
-                        op += nb;
-
-                        // the match source must not start before `dst`
-                        const uint64_t dis = v + min_dis;
-                        if (dis > uint64_t(out - dst)) [[unlikely]]
-                            return 0;
-
-                        isa_lib::cyccpy(out - dis, dis);
-                        out += T.len[c];
+                        if (cp != batch_start)
+                            continue;
                     }
-
-                    if (cp != batch_start)
-                        continue;
 
                     // Exact step: one token of any kind, everything checked, exact reads.
                     // Here `lp <= lp_end` and `op <= op_end`.

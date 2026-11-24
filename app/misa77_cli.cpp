@@ -268,9 +268,7 @@ namespace
         ensure_overwritable(outpath, force);
         Mapping out(outpath, orig); // exact size, no finish() needed
         const auto t0 = clk::now();
-        // safe mode: the file is untrusted input
-        const uint64_t r =
-            misa77::decompress(payload, payload_size, out.data(), orig, misa77::dconfig(true));
+        const uint64_t r = misa77::decompress(payload, payload_size, out.data(), orig);
         codec_s = seconds_since(t0);
         if (r != orig)
         {

@@ -4,10 +4,13 @@
 
 #pragma once
 
-// AVX2 copy/finder policy (256-bit).
+// AVX2 helper policy (256-bit).
 //
 // CONTRACT: the intrinsics below are AVX2, so this header MUST only be included
 // from a TU compiled with -mavx2.
+
+#include "decompressor_zoo/heavy_safe_kernels/kernel.h"
+#include "decompressor_zoo/light_safe_kernels/kernel.h"
 
 #include <cstdint>
 #include <immintrin.h>
@@ -70,5 +73,27 @@ namespace misa77
             return diff ? static_cast<uint64_t>(__builtin_ctz(diff)) : 32;
 #endif
         }
+
+        // AVX2 kernels for light and heavy
+#if defined(MISA77_ASM_KERNELS)
+        static constexpr bool has_light_kernel = true;
+        static constexpr bool has_heavy_kernel = true;
+
+        static uint8_t* light_kernel(const uint8_t* src,
+                                     uint8_t* dst,
+                                     const uint8_t* literals,
+                                     uint8_t* out_limit) noexcept
+        {
+            return misa77_light_safe_kernel_avx2(src, dst, literals, out_limit);
+        }
+
+        static uint64_t heavy_kernel(heavy::kernel_io* io) noexcept
+        {
+            return misa77_heavy_safe_kernel_avx2(io);
+        }
+#else
+        static constexpr bool has_light_kernel = false;
+        static constexpr bool has_heavy_kernel = false;
+#endif
     };
 } // namespace misa77

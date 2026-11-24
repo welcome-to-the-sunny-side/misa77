@@ -36,13 +36,12 @@ namespace misa77
 
     // Returns number of bytes written to `dst`, and 0 on failure.
     // Resolves the best decode path once per call, depending on the ISA.
-    // PRECONDITION: (dcfg.safe = true) OR (`src` and `src_size` must correspond to a valid misa77
-    // stream) Passing (dcfg.safe = false) and an invalid misa77 stream is UB!
+    // If the stream in `src` doesn't correspond to a valid misa77 stream, the function terminates
+    // gracefully (no UB).
     uint64_t decompress(const uint8_t* __restrict src,
                         uint64_t src_size,
                         uint8_t* __restrict dst,
-                        uint64_t dst_cap,
-                        dconfig dcfg)
+                        uint64_t dst_cap)
     {
         // no valid stream is shorter than 8 bytes (smallest is an empty file's bare header).
         if (src_size < 8)
@@ -50,13 +49,13 @@ namespace misa77
 
 #if defined(__x86_64__)
         if (__builtin_cpu_supports("avx2"))
-            return decompress_avx2(src, src_size, dst, dst_cap, dcfg);
-        return decompress_sse2(src, src_size, dst, dst_cap, dcfg);
+            return decompress_avx2(src, src_size, dst, dst_cap);
+        return decompress_sse2(src, src_size, dst, dst_cap);
 #elif defined(__aarch64__)
         // NEON is guaranteed on Aarch64
-        return decompress_neon(src, src_size, dst, dst_cap, dcfg);
+        return decompress_neon(src, src_size, dst, dst_cap);
 #else
-        return decompress_portable(src, src_size, dst, dst_cap, dcfg);
+        return decompress_portable(src, src_size, dst, dst_cap);
 #endif
     }
 

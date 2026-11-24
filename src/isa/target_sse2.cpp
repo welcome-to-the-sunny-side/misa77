@@ -13,9 +13,7 @@
 #include "compressor_zoo/light_swift_cimpl.h"
 #include "decompress_dispatch.h"
 #include "decompressor_zoo/heavy_safe_dimpl.h"
-#include "decompressor_zoo/heavy_unsafe_dimpl.h"
 #include "decompressor_zoo/light_safe_dimpl.h"
-#include "decompressor_zoo/light_unsafe_dimpl.h"
 #include "format.h"
 #include "isa/lib_sse2.h"
 
@@ -47,21 +45,14 @@ namespace misa77
     uint64_t decompress_sse2(const uint8_t* __restrict src,
                              uint64_t src_size,
                              uint8_t* __restrict dst,
-                             uint64_t dst_cap,
-                             dconfig dcfg)
+                             uint64_t dst_cap)
     {
         // heavy
         if ((src[7] & format_mask) != format_light)
-        {
-            if (dcfg.safe)
-                return heavy_safe_dimpl<lib_sse2>(src, src_size, dst, dst_cap);
-            return heavy_unsafe_dimpl<lib_sse2>(src, src_size, dst, dst_cap);
-        }
+            return heavy_safe_dimpl<lib_sse2>(src, src_size, dst, dst_cap);
 
         // light
-        if (dcfg.safe)
-            return light_safe_dimpl<lib_sse2>(src, src_size, dst, dst_cap);
-        return light_unsafe_dimpl<lib_sse2>(src, src_size, dst, dst_cap);
+        return light_safe_dimpl<lib_sse2>(src, src_size, dst, dst_cap);
     }
 
 } // namespace misa77

@@ -41,17 +41,6 @@ namespace misa77
         explicit config(int8_t l) : level(l) {}
     };
 
-    // decompressor config
-    class dconfig
-    {
-    public:
-        static constexpr uint8_t default_safety = false;
-
-        bool safe;
-        dconfig() : safe(default_safety) {}
-        explicit dconfig(bool s) : safe(s) {}
-    };
-
     // Upper-bound on compressed size (in bytes) for any input of size `src_size` bytes.
     // Use to size destination buffer. The bound depends on the format `cfg.level` emits, so
     // pass the same `cfg` you will pass to `compress`.
@@ -81,11 +70,10 @@ namespace misa77
     uint64_t decompressed_buffer_bound(uint64_t src_size);
 
     // Returns number of bytes written to `dst`, and 0 on failure.
-    // PRECONDITION: (dcfg.safe = true) OR (`src` and `src_size` must correspond to a valid misa77
-    // stream) Passing (dcfg.safe = false) and an invalid misa77 stream is UB!
+    // If the stream in `src` doesn't correspond to a valid misa77 stream, the function terminates
+    // gracefully (no UB).
     uint64_t decompress(const uint8_t* __restrict src,
                         uint64_t src_size,
                         uint8_t* __restrict dst,
-                        uint64_t dst_cap,
-                        dconfig dcfg = dconfig());
+                        uint64_t dst_cap);
 } // namespace misa77

@@ -17,21 +17,17 @@ namespace misa77
     uint64_t decompress_avx2(const uint8_t* __restrict src,
                              uint64_t src_size,
                              uint8_t* __restrict dst,
-                             uint64_t dst_cap,
-                             dconfig dcfg);
+                             uint64_t dst_cap);
     uint64_t decompress_sse2(const uint8_t* __restrict src,
                              uint64_t src_size,
                              uint8_t* __restrict dst,
-                             uint64_t dst_cap,
-                             dconfig dcfg);
+                             uint64_t dst_cap);
     uint64_t decompress_neon(const uint8_t* __restrict src,
                              uint64_t src_size,
                              uint8_t* __restrict dst,
-                             uint64_t dst_cap,
-                             dconfig dcfg);
+                             uint64_t dst_cap);
     uint64_t decompress_portable(const uint8_t* __restrict src,
                                  uint64_t src_size,
                                  uint8_t* __restrict dst,
-                                 uint64_t dst_cap,
-                                 dconfig dcfg);
+                                 uint64_t dst_cap);
 } // namespace misa77

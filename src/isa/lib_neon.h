@@ -4,7 +4,7 @@
 
 #pragma once
 
-// ARM NEON (2x128-bit) copy/finder policy.
+// ARM helper policy.
 //
 // CONTRACT: NEON (AdvSIMD) is guaranteed by the AArch64 ISA, so this header only
 // requires the including TU to be an AArch64 baseline build (-march=armv8-a).
@@ -84,5 +84,9 @@ namespace misa77
                 return (vector_width / 2) + (static_cast<uint64_t>(__builtin_ctzll(diff1)) >> 2);
             return vector_width;
         }
+
+        // no NEON kernels for light and heavy yet
+        static constexpr bool has_light_kernel = false;
+        static constexpr bool has_heavy_kernel = false;
     };
 } // namespace misa77

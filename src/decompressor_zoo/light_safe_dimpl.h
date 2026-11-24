@@ -55,168 +55,177 @@ namespace misa77
             literal_suffix_cnt > original_size) [[unlikely]]
             return 0;
 
-        const uint8_t* control = src + 16;
         const uint8_t* literals = src + src_size - literal_suffix_cnt;
+        const uint8_t* control = src + 16;
         uint8_t* out = dst;
 
         // The loop may produce at most this much output (we put the raw suffix after this)
         const uint64_t loop_limit = original_size - literal_suffix_cnt;
         uint8_t* const out_limit = dst + loop_limit;
 
-        constexpr uint64_t dis_ceil = dis_lim + hashtab_lag; // max representable dis
-
-        uint8_t* const prefix_end = dst + std::min(dis_ceil, loop_limit);
-
-        // Fully guarded step for an initial small prefix (match distance is dangerous here), and
-        // the tail
-        auto guarded_step = [&]() -> bool
+        // kernel path
+        if constexpr(isa_lib::has_light_kernel)
         {
-            uint8_t token = control[0];
-            uint64_t lit_len = token >> 5;
-            uint64_t match_len = (token & uint8_t(0x1F)) + min_match_len - 1;
-
-            uint16_t dis_small = loadu2(control + 1);
-            uint32_t dis = dis_small + hashtab_lag + 1;
-
-            control += 3;
-
-            if (lit_len == 7) [[unlikely]]
-            {
-                uint64_t pot_add = *control;
-                lit_len += pot_add;
-                ++control;
-
-                constexpr uint64_t ext_full = 255;
-                if (pot_add == ext_full) [[unlikely]]
-                {
-                    // Bounded, shouldn't just keep reading ahead as it finds 255s
-                    while (*control == ext_full) [[unlikely]]
-                    {
-                        lit_len += ext_full, ++control;
-                        if (control >= literals) [[unlikely]]
-                            return false;
-                    }
-                    lit_len += *control, ++control;
-                }
-            }
-
-            // no src underflow.
-            if (lit_len > uint64_t(literals - src)) [[unlikely]]
-                return false;
-
-            // bound this token's dst writes
-            if (uint64_t(out - dst) + lit_len + min_match_len > loop_limit) [[unlikely]]
-                return false;
-
-            literals -= lit_len;
-            if (lit_len > dec_literal_copy) [[unlikely]]
-            {
-                isa_lib::copy32(out, literals);
-
-                if (lit_len > vector_width) [[unlikely]]
-                {
-                    memcpy(out + vector_width, literals + vector_width, lit_len - vector_width);
-                }
-            }
-            else
-            {
-                memcpy(out, literals, dec_literal_copy);
-            }
-            out += lit_len;
-
-            // match source must not start before dst[0].
-            if (dis > uint64_t(out - dst)) [[unlikely]]
-                return false;
-
-            isa_lib::cyccpy(out - dis, dis);
-            out += match_len;
-            return true;
-        };
-
-        // Prefix: first dis_ceil output bytes.
-        while (control < literals and out < prefix_end)
-            if (!guarded_step()) [[unlikely]]
-                return 0;
-
-        // The fast loop below must never begin a token within red_slack bytes of
-        // out_limit.
-        constexpr uint64_t red_slack = 8;
-
-        // A non-extras token has lit_len <= 6 and starts at out <= out_limit - red_slack
-        // cyccpy write must stay inside the suffix slack past out_limit
-        static_assert(6 + vector_width - (red_slack + 1) <= literal_suffix);
-        // a match code 31 must not advance `out` past one-past-the-end of a dst buffer
-        static_assert(6 + (31 + min_match_len - 1) - (red_slack + 1) <= literal_suffix);
-
-        uint8_t* const red = dst + (loop_limit > red_slack ? loop_limit - red_slack : uint64_t(0));
-
-        // Fast main loop: no per-token guards outside the extras branch.
-        while (control < literals and out < red)
-        {
-            uint8_t token = control[0];
-            uint64_t lit_len = token >> 5;
-            uint64_t match_len = (token & uint8_t(0x1F)) + min_match_len - 1;
-
-            uint16_t dis_small = loadu2(control + 1);
-            uint32_t dis = dis_small + hashtab_lag + 1;
-
-            control += 3;
-
-            if (lit_len == 7) [[unlikely]]
-            {
-                uint64_t pot_add = *control;
-                lit_len += pot_add;
-                ++control;
-
-                constexpr uint64_t ext_full = 255;
-                if (pot_add == ext_full) [[unlikely]]
-                {
-                    // Bounded, shouldn't just keep reading ahead as it finds 255s
-                    while (*control == ext_full) [[unlikely]]
-                    {
-                        lit_len += ext_full, ++control;
-                        if (control >= literals) [[unlikely]]
-                            return 0;
-                    }
-                    lit_len += *control, ++control;
-                }
-
-                if (lit_len > uint64_t(literals - src)) [[unlikely]]
-                    return 0;
-#if defined(__clang__)
-                // Equivalent to the check below, rewritten in terms of `red`
-                if (lit_len - (red_slack - min_match_len) > uint64_t(red - out)) [[unlikely]]
-                    return 0;
-#else
-                if (lit_len + min_match_len > uint64_t(out_limit - out)) [[unlikely]]
-                    return 0;
-#endif
-            }
-
-            literals -= lit_len;
-            if (lit_len > dec_literal_copy) [[unlikely]]
-            {
-                isa_lib::copy32(out, literals);
-
-                if (lit_len > vector_width) [[unlikely]]
-                {
-                    memcpy(out + vector_width, literals + vector_width, lit_len - vector_width);
-                }
-            }
-            else
-            {
-                memcpy(out, literals, dec_literal_copy);
-            }
-            out += lit_len;
-
-            isa_lib::cyccpy(out - dis, dis);
-            out += match_len;
+            // returns null if something goes wrong, and this results in `out != out_limit` triggering below
+            out = isa_lib::light_kernel(src, dst, literals, out_limit);
         }
+        else
+        {
+            constexpr uint64_t dis_ceil = dis_lim + hashtab_lag; // max representable dis
 
-        // The last few tokens
-        while (control < literals)
-            if (!guarded_step()) [[unlikely]]
-                return 0;
+            uint8_t* const prefix_end = dst + std::min(dis_ceil, loop_limit);
+
+            // Fully guarded step for an initial small prefix (match distance is dangerous here), and
+            // the tail
+            auto guarded_step = [&]() -> bool
+            {
+                uint8_t token = control[0];
+                uint64_t lit_len = token >> 5;
+                uint64_t match_len = (token & uint8_t(0x1F)) + min_match_len - 1;
+
+                uint16_t dis_small = loadu2(control + 1);
+                uint32_t dis = dis_small + hashtab_lag + 1;
+
+                control += 3;
+
+                if (lit_len == 7) [[unlikely]]
+                {
+                    uint64_t pot_add = *control;
+                    lit_len += pot_add;
+                    ++control;
+
+                    constexpr uint64_t ext_full = 255;
+                    if (pot_add == ext_full) [[unlikely]]
+                    {
+                        // Bounded, shouldn't just keep reading ahead as it finds 255s
+                        while (*control == ext_full) [[unlikely]]
+                        {
+                            lit_len += ext_full, ++control;
+                            if (control >= literals) [[unlikely]]
+                                return false;
+                        }
+                        lit_len += *control, ++control;
+                    }
+                }
+
+                // no src underflow.
+                if (lit_len > uint64_t(literals - src)) [[unlikely]]
+                    return false;
+
+                // bound this token's dst writes
+                if (uint64_t(out - dst) + lit_len + min_match_len > loop_limit) [[unlikely]]
+                    return false;
+
+                literals -= lit_len;
+                if (lit_len > dec_literal_copy) [[unlikely]]
+                {
+                    isa_lib::copy32(out, literals);
+
+                    if (lit_len > vector_width) [[unlikely]]
+                    {
+                        memcpy(out + vector_width, literals + vector_width, lit_len - vector_width);
+                    }
+                }
+                else
+                {
+                    memcpy(out, literals, dec_literal_copy);
+                }
+                out += lit_len;
+
+                // match source must not start before dst[0].
+                if (dis > uint64_t(out - dst)) [[unlikely]]
+                    return false;
+
+                isa_lib::cyccpy(out - dis, dis);
+                out += match_len;
+                return true;
+            };
+
+            // Prefix: first dis_ceil output bytes.
+            while (control < literals and out < prefix_end)
+                if (!guarded_step()) [[unlikely]]
+                    return 0;
+
+            // The fast loop below must never begin a token within red_slack bytes of
+            // out_limit.
+            constexpr uint64_t red_slack = 8;
+
+            // A non-extras token has lit_len <= 6 and starts at out <= out_limit - red_slack
+            // cyccpy write must stay inside the suffix slack past out_limit
+            static_assert(6 + vector_width - (red_slack + 1) <= literal_suffix);
+            // a match code 31 must not advance `out` past one-past-the-end of a dst buffer
+            static_assert(6 + (31 + min_match_len - 1) - (red_slack + 1) <= literal_suffix);
+
+            uint8_t* const red = dst + (loop_limit > red_slack ? loop_limit - red_slack : uint64_t(0));
+
+            // Fast main loop: no per-token guards outside the extras branch.
+            while (control < literals and out < red)
+            {
+                uint8_t token = control[0];
+                uint64_t lit_len = token >> 5;
+                uint64_t match_len = (token & uint8_t(0x1F)) + min_match_len - 1;
+
+                uint16_t dis_small = loadu2(control + 1);
+                uint32_t dis = dis_small + hashtab_lag + 1;
+
+                control += 3;
+
+                if (lit_len == 7) [[unlikely]]
+                {
+                    uint64_t pot_add = *control;
+                    lit_len += pot_add;
+                    ++control;
+
+                    constexpr uint64_t ext_full = 255;
+                    if (pot_add == ext_full) [[unlikely]]
+                    {
+                        // Bounded, shouldn't just keep reading ahead as it finds 255s
+                        while (*control == ext_full) [[unlikely]]
+                        {
+                            lit_len += ext_full, ++control;
+                            if (control >= literals) [[unlikely]]
+                                return 0;
+                        }
+                        lit_len += *control, ++control;
+                    }
+
+                    if (lit_len > uint64_t(literals - src)) [[unlikely]]
+                        return 0;
+    #if defined(__clang__)
+                    // Equivalent to the check below, rewritten in terms of `red`
+                    if (lit_len - (red_slack - min_match_len) > uint64_t(red - out)) [[unlikely]]
+                        return 0;
+    #else
+                    if (lit_len + min_match_len > uint64_t(out_limit - out)) [[unlikely]]
+                        return 0;
+    #endif
+                }
+
+                literals -= lit_len;
+                if (lit_len > dec_literal_copy) [[unlikely]]
+                {
+                    isa_lib::copy32(out, literals);
+
+                    if (lit_len > vector_width) [[unlikely]]
+                    {
+                        memcpy(out + vector_width, literals + vector_width, lit_len - vector_width);
+                    }
+                }
+                else
+                {
+                    memcpy(out, literals, dec_literal_copy);
+                }
+                out += lit_len;
+
+                isa_lib::cyccpy(out - dis, dis);
+                out += match_len;
+            }
+
+            // The last few tokens
+            while (control < literals)
+                if (!guarded_step()) [[unlikely]]
+                    return 0;
+        }
 
         if (out != out_limit)
             return 0;
