@@ -11,7 +11,7 @@
 
 namespace misa77::heavy
 {
-    // Layout is hard-coded in x86_64.inc.
+    // Layout is hard-coded in x86_64.inc and aarch64.inc.
     struct kernel_io
     {
         const uint8_t* cp;      //  0 cmd cursor
@@ -57,6 +57,28 @@ namespace misa77::heavy
     inline constexpr kernel_tables kernel_tables_a{tables_a};
     inline constexpr kernel_tables kernel_tables_s{tables_s};
 
+    // what the kernels assume of a codebook
+    constexpr bool kernel_codebook_ok(const decode_tables& T)
+    {
+        for (uint32_t c = 0; c < codebook_size; ++c)
+        {
+            const uint32_t ob = T.nb[c] & (big_flag - 1);
+            if (T.nb[c] & big_flag)
+            {
+                // no offset bytes; literals or a match, not both; copied 32 bytes at a time
+                if (ob != 0 or (T.full_lit[c] != 0 and T.full_len[c] != 0) or
+                    T.full_lit[c] % vector_width != 0 or T.full_len[c] % vector_width != 0)
+                    return false;
+            }
+            // a new distance always comes with a match
+            else if (T.lit[c] > dec_literal_copy or T.len[c] > max_small_len or
+                     ob >= offset_load or (ob != 0 and T.len[c] == 0))
+                return false;
+        }
+        return T.max_dis <= (uint64_t(1) << 24) + vector_width;
+    }
+    static_assert(kernel_codebook_ok(tables_a) and kernel_codebook_ok(tables_s));
+
     // the kernel table of codebook `T`
     constexpr const kernel_tables& kernel_tables_for(const decode_tables& T)
     {
@@ -75,5 +97,11 @@ extern "C"
 {
     uint64_t misa77_heavy_safe_kernel_avx2(misa77::heavy::kernel_io* io) noexcept;
     uint64_t misa77_heavy_safe_kernel_sse2(misa77::heavy::kernel_io* io) noexcept;
+}
+#elif defined(MISA77_ASM_KERNELS) && defined(__aarch64__)
+// Token loop in aarch64.inc, one block per call. Same return values.
+extern "C"
+{
+    uint64_t misa77_heavy_safe_kernel_neon(misa77::heavy::kernel_io* io) noexcept;
 }
 #endif

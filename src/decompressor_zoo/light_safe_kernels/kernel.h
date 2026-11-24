@@ -20,4 +20,13 @@ extern "C"
                                            const uint8_t* literals,
                                            uint8_t* out_limit) noexcept;
 }
+#elif defined(MISA77_ASM_KERNELS) && defined(__aarch64__)
+// Sequence loop in aarch64.inc. Returns the final `out`, or null on a rejected stream.
+extern "C"
+{
+    uint8_t* misa77_light_safe_kernel_neon(const uint8_t* src,
+                                           uint8_t* dst,
+                                           const uint8_t* literals,
+                                           uint8_t* out_limit) noexcept;
+}
 #endif

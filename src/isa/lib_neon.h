@@ -9,6 +9,8 @@
 // CONTRACT: NEON (AdvSIMD) is guaranteed by the AArch64 ISA, so this header only
 // requires the including TU to be an AArch64 baseline build (-march=armv8-a).
 
+#include "decompressor_zoo/heavy_safe_kernels/kernel.h"
+#include "decompressor_zoo/light_safe_kernels/kernel.h"
 #include "format.h" // vector_width
 
 #include <arm_neon.h>
@@ -85,8 +87,26 @@ namespace misa77
             return vector_width;
         }
 
-        // no NEON kernels for light and heavy yet
+        // NEON kernels for light and heavy
+#if defined(MISA77_ASM_KERNELS)
+        static constexpr bool has_light_kernel = true;
+        static constexpr bool has_heavy_kernel = true;
+
+        static uint8_t* light_kernel(const uint8_t* src,
+                                     uint8_t* dst,
+                                     const uint8_t* literals,
+                                     uint8_t* out_limit) noexcept
+        {
+            return misa77_light_safe_kernel_neon(src, dst, literals, out_limit);
+        }
+
+        static uint64_t heavy_kernel(heavy::kernel_io* io) noexcept
+        {
+            return misa77_heavy_safe_kernel_neon(io);
+        }
+#else
         static constexpr bool has_light_kernel = false;
         static constexpr bool has_heavy_kernel = false;
+#endif
     };
 } // namespace misa77

@@ -122,7 +122,7 @@ namespace misa77
                         // then, so the batch never has to.
                         if (v + min_dis == 0)
                             batch = 0;
-
+                            
                         const uint8_t* const batch_start = cp;
                         const uint8_t* const batch_end = cp + batch;
 

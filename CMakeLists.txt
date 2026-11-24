@@ -38,9 +38,11 @@ add_library(misa77
     src/decompressor_zoo/light_safe_dimpl.h
     src/decompressor_zoo/light_safe_kernels/kernel.h
     src/decompressor_zoo/light_safe_kernels/x86_64.inc
+    src/decompressor_zoo/light_safe_kernels/aarch64.inc
     src/decompressor_zoo/heavy_safe_dimpl.h
     src/decompressor_zoo/heavy_safe_kernels/kernel.h
     src/decompressor_zoo/heavy_safe_kernels/x86_64.inc
+    src/decompressor_zoo/heavy_safe_kernels/aarch64.inc
     src/decompress_dispatch.h
     src/compressor_zoo/light_blitz_cimpl.h
     src/compressor_zoo/light_swift_cimpl.h
@@ -102,13 +104,18 @@ endif()
 
 # Hand-written assembly decode kernels. On by default and used wherever one exists for the
 # target; everywhere else (and with -DMISA77_ASM=OFF) the C++ decoders are used.
-# Currently: x86-64 ELF targets with a GNU-style compiler driver.
+# Currently: x86-64 ELF targets and AArch64 ELF / Mach-O targets, with a GNU-style compiler driver.
 option(MISA77_ASM "Use the assembly decode kernels where available" ON)
 set(MISA77_ASM_ACTIVE OFF)
-if(MISA77_ASM
-   AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64"
-   AND UNIX AND NOT APPLE
-   AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+set(MISA77_ASM_ARCH "")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64" AND UNIX AND NOT APPLE)
+    set(MISA77_ASM_ARCH "x86_64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64" AND UNIX
+       AND NOT CMAKE_OSX_ARCHITECTURES MATCHES "x86_64")
+    # not for a macOS build that targets x86-64 (alone or in a universal binary)
+    set(MISA77_ASM_ARCH "aarch64")
+endif()
+if(MISA77_ASM AND MISA77_ASM_ARCH AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     include(CheckLanguage)
     check_language(ASM)
     if(CMAKE_ASM_COMPILER)
@@ -117,11 +124,17 @@ if(MISA77_ASM
     endif()
 endif()
 if(MISA77_ASM_ACTIVE)
-    target_sources(misa77 PRIVATE
-        src/decompressor_zoo/light_safe_kernels/x86_64_avx2.S
-        src/decompressor_zoo/light_safe_kernels/x86_64_sse2.S
-        src/decompressor_zoo/heavy_safe_kernels/x86_64_avx2.S
-        src/decompressor_zoo/heavy_safe_kernels/x86_64_sse2.S)
+    if(MISA77_ASM_ARCH STREQUAL "x86_64")
+        target_sources(misa77 PRIVATE
+            src/decompressor_zoo/light_safe_kernels/x86_64_avx2.S
+            src/decompressor_zoo/light_safe_kernels/x86_64_sse2.S
+            src/decompressor_zoo/heavy_safe_kernels/x86_64_avx2.S
+            src/decompressor_zoo/heavy_safe_kernels/x86_64_sse2.S)
+    else()
+        target_sources(misa77 PRIVATE
+            src/decompressor_zoo/light_safe_kernels/aarch64_neon.S
+            src/decompressor_zoo/heavy_safe_kernels/aarch64_neon.S)
+    endif()
     target_compile_definitions(misa77 PRIVATE MISA77_ASM_KERNELS=1)
 endif()
 message(STATUS "misa77: assembly decode kernels: ${MISA77_ASM_ACTIVE}")
