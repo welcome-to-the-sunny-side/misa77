@@ -27,6 +27,29 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+  # MinGW-w64 GCC: the C++ decoders (no assembly kernels on Windows) and 32-bit `long`.
+  windows-mingw:
+    name: windows-mingw-gcc
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
   sanitizers:
     name: linux-clang-asan-ubsan
     runs-on: ubuntu-latest
