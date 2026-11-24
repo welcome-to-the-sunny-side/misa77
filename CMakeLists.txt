@@ -140,6 +140,11 @@ endif()
 message(STATUS "misa77: assembly decode kernels: ${MISA77_ASM_ACTIVE}")
 
 option(MISA77_BUILD_CLI "Build the misa command-line tool" ON)
+# The CLI maps its files with POSIX calls, so it is not built on Windows.
+if(MISA77_BUILD_CLI AND WIN32)
+    message(STATUS "misa77: command-line tool: not built on Windows")
+    set(MISA77_BUILD_CLI OFF)
+endif()
 if(MISA77_BUILD_CLI)
     add_executable(misa77_cli app/misa77_cli.cpp)
     set_target_properties(misa77_cli PROPERTIES OUTPUT_NAME misa)
