@@ -35,7 +35,7 @@ namespace misa77
             return flat_table_size + size_fields + (n * max_code_len + 7) / 8 + payload_split;
         }
 
-        // Optimal code lengths limited to `max_code_len` (package-merge). 
+        // Optimal code lengths limited to `max_code_len` (package-merge).
         // Absent symbols have `len[a] = 0`, and if there's only one symbol, it gets length 1.
         // Returns the total number of code bits.
         inline uint64_t code_lengths(const uint32_t* cnt, uint8_t* len)
@@ -150,9 +150,10 @@ namespace misa77
         }
 
         // Symbols are coded back to front.
-        // Decode index j is `s[n - 1 - j]`, in bit string `j % payload_split`. 
+        // Decode index j is `s[n - 1 - j]`, in bit string `j % payload_split`.
         // Returns bytes written.
-        inline uint64_t write_streams(uint8_t* dst, const uint8_t* s, uint64_t n, const uint8_t* len)
+        inline uint64_t
+        write_streams(uint8_t* dst, const uint8_t* s, uint64_t n, const uint8_t* len)
         {
             uint16_t code[symbol_cnt] = {};
             codewords(len, code);

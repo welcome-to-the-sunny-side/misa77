@@ -71,8 +71,8 @@ namespace misa77::heavy
                     return false;
             }
             // a new distance always comes with a match
-            else if (T.lit[c] > dec_literal_copy or T.len[c] > max_small_len or
-                     ob >= offset_load or (ob != 0 and T.len[c] == 0))
+            else if (T.lit[c] > dec_literal_copy or T.len[c] > max_small_len or ob >= offset_load or
+                     (ob != 0 and T.len[c] == 0))
                 return false;
         }
         return T.max_dis <= (uint64_t(1) << 24) + vector_width;

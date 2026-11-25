@@ -22,7 +22,8 @@ namespace misa77
     inline constexpr uint8_t format_heavy = 1;
     inline constexpr uint8_t format_entropy = 2;
 
-    // Width in bytes of several unconditional operations we perform through isa libs in all 3 formats.
+    // Width in bytes of several unconditional operations we perform through isa libs in all 3
+    // formats.
     inline constexpr uint64_t vector_width = 32;
 
     // light format, used by levels in [config::min_level, config::heavy_lb)
@@ -350,8 +351,8 @@ namespace misa77
         // Every other flags bit must be 0, so this is the ONLY valid flags byte here.
         inline constexpr uint8_t flags = format_entropy;
 
-        // Stream: [header][blocks][first `prefix_size` output bytes][last `suffix_size` output bytes]
-        // Blocks cover output positions [prefix_size, n - suffix_size).
+        // Stream: [header][blocks][first `prefix_size` output bytes][last `suffix_size` output
+        // bytes] Blocks cover output positions [prefix_size, n - suffix_size).
         inline constexpr uint64_t prefix_size = 32;
         inline constexpr uint64_t suffix_size = 48;
 
@@ -363,11 +364,14 @@ namespace misa77
         inline constexpr uint64_t small_lim = prefix_size + 2 * suffix_size;
         static_assert(small_lim == 128);
 
-        // We make cuts on the input at multiples of `block_size`, and the bytes between two adjacent cuts correspond to a block (except for the first and last blocks, where the raw prefix and suffix eat in)
+        // We make cuts on the input at multiples of `block_size`, and the bytes between two
+        // adjacent cuts correspond to a block (except for the first and last blocks, where the raw
+        // prefix and suffix eat in)
         inline constexpr uint64_t block_size = uint64_t(1) << 18;
 
-        // Each block is divided into mutually exclusive and exhaustive DELTA cells of size `cell_size`.
-        // Each cell may or may not be actually delta coded (and therefore have a stride).
+        // Each block is divided into mutually exclusive and exhaustive DELTA cells of size
+        // `cell_size`. Each cell may or may not be actually delta coded (and therefore have a
+        // stride).
         inline constexpr uint64_t cell_size = uint64_t(1) << 12;
         static_assert(block_size % cell_size == 0);
 
@@ -390,7 +394,8 @@ namespace misa77
         // A match can never overlap with where we're writing it
         static_assert(min_dis >= max_match_len and max_match_len == vector_width);
 
-        // The repeat distance is initialised to `initial_dis` (R tokens can occur before the first N token).
+        // The repeat distance is initialised to `initial_dis` (R tokens can occur before the first
+        // N token).
         inline constexpr uint64_t initial_dis = min_dis;
         // its source exists at the first block's first byte
         static_assert(initial_dis <= prefix_size);
@@ -406,10 +411,12 @@ namespace misa77
         // block
 
         // mode byte, must be equal to one of the following values
-        inline constexpr uint8_t mode_vanilla = 0;  // entropy, no sub/delta
-        inline constexpr uint8_t mode_sub = 1;    // literals are difference coded (`s[x] = lit + s[x - repeat distance (at the time)]`)
-        inline constexpr uint8_t mode_delta = 2;  // strides follow the fixed header
-        inline constexpr uint8_t mode_stored = 4; // the block's bytes are stored raw (only valid alone)
+        inline constexpr uint8_t mode_vanilla = 0; // entropy, no sub/delta
+        inline constexpr uint8_t mode_sub = 1; // literals are difference coded (`s[x] = lit + s[x -
+                                               // repeat distance (at the time)]`)
+        inline constexpr uint8_t mode_delta = 2; // strides follow the fixed header
+        inline constexpr uint8_t mode_stored =
+            4; // the block's bytes are stored raw (only valid alone)
         inline constexpr uint8_t mode_sub_delta = mode_sub | mode_delta;
 
         // Coded block: [mode][u24 cmd_cnt][u24 lit_cnt][u24 o1_cnt][u24 o2_cnt][u24 o3_cnt]
@@ -446,7 +453,8 @@ namespace misa77
         // size of each coded stream
         inline constexpr uint64_t coded_size_bytes = 3;
 
-        // A coded stream: [table in either nibble or sparse form][1st bit string][2nd bit string]...[`payload_split`'th bit string][size of each bit string but the last]
+        // A coded stream: [table in either nibble or sparse form][1st bit string][2nd bit
+        // string]...[`payload_split`'th bit string][size of each bit string but the last]
         namespace huffman
         {
             // all bytes
@@ -458,13 +466,13 @@ namespace misa77
             // We split the stream into `payload_split` bitstrings (break serial dependencies).
             // symbol j from a stream's end is in bit string `j % payload_split`
             inline constexpr uint32_t payload_split = 12;
-            
+
             // bytes to indicate size of each split bitstring (except the last)
             inline constexpr uint64_t split_size_bytes = 2;
             inline constexpr uint64_t size_fields = (payload_split - 1) * split_size_bytes;
 
             // table byte 0
-            
+
             // byte = 0 => just store a nibble for each symbol's code length
             inline constexpr uint8_t table_flat = 0;
             static_assert(max_code_len < (1 << 4));
@@ -480,11 +488,13 @@ namespace misa77
         } // namespace huffman
 
         // codebook
-        
-        // What the codec assumes of the codebook. 
-        // I might have missed some checks, and therefore do not recommend hot-swapping in a codebook that happens to pass the below checks...
 
-        // A command with a new distance has a match of at least this length (note: the decoder uses this in a slightly non-trivial way for scratch allocation, be careful)
+        // What the codec assumes of the codebook.
+        // I might have missed some checks, and therefore do not recommend hot-swapping in a
+        // codebook that happens to pass the below checks...
+
+        // A command with a new distance has a match of at least this length (note: the decoder uses
+        // this in a slightly non-trivial way for scratch allocation, be careful)
         inline constexpr uint64_t min_new_tok_match_len = 3;
 
         constexpr bool codebook_wellformed(const entry (&cb)[codebook_size])
@@ -538,7 +548,8 @@ namespace misa77
             return c;
         }
 
-        // `codebook_wellformed` enforces kinds being non-decreasing, so this implies that (code >= first_new) <=> (kind[code] == N)
+        // `codebook_wellformed` enforces kinds being non-decreasing, so this implies that (code >=
+        // first_new) <=> (kind[code] == N)
         inline constexpr uint32_t first_new = first_of_kind_n(codebook);
 
         // Header, one mode byte per block (a block is stored when coding doesn't help).

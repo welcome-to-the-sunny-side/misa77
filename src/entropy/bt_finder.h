@@ -219,7 +219,9 @@ namespace misa77
             }
 
             // Frontiers of [bs, be): those of position `bs + i` are `mm[moff[i], moff[i + 1])`
-            void find_block(uint32_t bs, uint32_t be, std::vector<uint32_t>& moff,
+            void find_block(uint32_t bs,
+                            uint32_t be,
+                            std::vector<uint32_t>& moff,
                             std::vector<match>& mm)
             {
                 moff.clear();

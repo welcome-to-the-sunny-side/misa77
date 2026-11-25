@@ -33,7 +33,7 @@ namespace fmt
     constexpr bool entropy_ported = true;
 
     // highest level whose compressor exists
-    constexpr int8_t top_level = entropy_ported  ? misa77::config::max_level
+    constexpr int8_t top_level = entropy_ported ? misa77::config::max_level
                                  : heavy_ported ? int8_t(misa77::config::entropy_lb - 1)
                                                 : int8_t(misa77::config::heavy_lb - 1);
 
@@ -674,8 +674,14 @@ namespace
                 out.push_back(prng_byte(seed));
         }
 
-        size_t block_end() const { return std::min((out.size() / block + 1) * block, n - suffix); }
-        size_t open_end() const { return std::min((start / block + 1) * block, n - suffix); }
+        size_t block_end() const
+        {
+            return std::min((out.size() / block + 1) * block, n - suffix);
+        }
+        size_t open_end() const
+        {
+            return std::min((start / block + 1) * block, n - suffix);
+        }
 
         void begin(uint8_t mode_, uint32_t coded_, std::vector<uint8_t> strides_ = {})
         {
@@ -866,8 +872,10 @@ namespace
                 a.decompress(u.data(), u.size(), d.data(), n) != 0 or
                 a.decompress(s.data(), s.size(), d.data(), n - 1) != 0)
             {
-                std::fprintf(stderr, "[entropy-handbuilt/%s] FAIL (%s): wrong size accepted\n",
-                             name, a.name);
+                std::fprintf(stderr,
+                             "[entropy-handbuilt/%s] FAIL (%s): wrong size accepted\n",
+                             name,
+                             a.name);
                 return;
             }
         }
@@ -955,8 +963,9 @@ namespace
                           b.tok(kind::R, 0, 1);
                 for (int i = 0; i < 40; ++i)
                     ok = ok and b.tok(kind::R, 15, 0);
-                ok = ok and b.tok(kind::N, 4, 32, 287) and b.tok(kind::N, 0, 4, 288) and b.tok(kind::N, 1, 3, 40) and
-                     b.tok(kind::N, 0, 32, 700) and b.tok(kind::R, 1, 1);
+                ok = ok and b.tok(kind::N, 4, 32, 287) and b.tok(kind::N, 0, 4, 288) and
+                     b.tok(kind::N, 1, 3, 40) and b.tok(kind::N, 0, 32, 700) and
+                     b.tok(kind::R, 1, 1);
                 for (int i = 0; i < 300 and ok; ++i)
                 {
                     const size_t at = b.out.size();
@@ -1001,6 +1010,33 @@ namespace
         }
     }
 
+    // --- Entropy format: compress() refuses a destination below compress_bound ---
+    void run_entropy_bound(Stats& stats)
+    {
+        const misa77::config cfg(misa77::config::entropy_lb);
+        for (const size_t n : {size_t(0), size_t(100), size_t(129), size_t(5000), size_t(300000)})
+        {
+            ++stats.total;
+            const std::vector<uint8_t> in = random_vec(n, 77);
+            const uint64_t bound = misa77::compress_bound(n, cfg);
+            std::vector<uint8_t> out(bound);
+            const uint64_t refused = misa77::compress(in.data(), n, out.data(), bound - 1, cfg);
+            const uint64_t written = misa77::compress(in.data(), n, out.data(), bound, cfg);
+            if (refused != 0 or written == 0 or written > bound)
+            {
+                std::fprintf(stderr,
+                             "[entropy-bound] FAIL: n = %zu, bound %llu, cap bound - 1 returned "
+                             "%llu, cap bound returned %llu\n",
+                             n,
+                             static_cast<unsigned long long>(bound),
+                             static_cast<unsigned long long>(refused),
+                             static_cast<unsigned long long>(written));
+                continue;
+            }
+            ++stats.passed;
+        }
+        std::printf("[entropy-bound] done\n");
+    }
 } // namespace
 
 int main(int argc, char** argv)
@@ -1009,6 +1045,7 @@ int main(int argc, char** argv)
 
     run_heavy_handbuilt(stats);
     run_entropy_handbuilt(stats);
+    run_entropy_bound(stats);
 
     // --- Edge cases / small-mode boundary (<= small_lim is stored raw) ------
     run_one({}, "empty", stats);

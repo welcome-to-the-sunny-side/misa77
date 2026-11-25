@@ -4,9 +4,9 @@
 
 #pragma once
 
+#include "decompressor_zoo/heavy_safe_kernels/kernel.h"
 #include "format.h"
 #include "util.h"
-#include "decompressor_zoo/heavy_safe_kernels/kernel.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -111,18 +111,18 @@ namespace misa77
                             return 0;
 
                         // Number of small tokens that can run with no checks on the cursors:
-                        // each reads `<= dec_literal_copy` literal bytes, loads `offset_load` offset
-                        // bytes, and writes `<= max_small_out` bytes past `out`.
+                        // each reads `<= dec_literal_copy` literal bytes, loads `offset_load`
+                        // offset bytes, and writes `<= max_small_out` bytes past `out`.
                         uint64_t batch = uint64_t(cp_end - cp);
                         batch = std::min(batch, uint64_t(src_end - lp) / dec_literal_copy);
                         batch = std::min(batch, uint64_t(src_end - op) / offset_load);
-                        batch = std::min(batch,
-                                         out < out_lim ? uint64_t(out_lim - out) / max_small_out : 0);
+                        batch = std::min(
+                            batch, out < out_lim ? uint64_t(out_lim - out) / max_small_out : 0);
                         // No distance yet (`dis = 0`): the exact step rejects repeat matches until
                         // then, so the batch never has to.
                         if (v + min_dis == 0)
                             batch = 0;
-                            
+
                         const uint8_t* const batch_start = cp;
                         const uint8_t* const batch_end = cp + batch;
 
@@ -133,8 +133,8 @@ namespace misa77
                             const uint64_t nb = T.nb[c];
                             ++cp;
 
-                            // Big token: rounded copies as in the unsafe decoder, checked here, then a
-                            // new batch. The budget already covers its 4-byte offset load.
+                            // Big token: rounded copies as in the unsafe decoder, checked here,
+                            // then a new batch. The budget already covers its 4-byte offset load.
                             if (nb & big_flag) [[unlikely]]
                             {
                                 const uint64_t lit = T.full_lit[c];

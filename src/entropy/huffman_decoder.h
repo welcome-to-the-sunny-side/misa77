@@ -16,8 +16,9 @@
 // [table][`payload_split` bit strings][size of each but the last]
 //
 // Symbol j (counted from the end of the decoded stream) lives in bit string `j % payload_split`.
-// A bit string is read LSB first. 
-// Since codewords are stored bit-reversed, the low `max_code_len` bits can be used to index the table directly.
+// A bit string is read LSB first.
+// Since codewords are stored bit-reversed, the low `max_code_len` bits can be used to index the
+// table directly.
 
 namespace misa77
 {
@@ -80,12 +81,12 @@ namespace misa77
         // Layout is hard-coded in the kernels.
         struct kernel_io
         {
-            uint8_t* out;                 //   0 one past the next symbol to write (descending)
-            uint8_t* out_stop;            //   8 run whole rounds while out > out_stop
-            const uint16_t* table;        //  16
-            const uint8_t* lim;           //  24 and while the last two pointers are <= lim
+            uint8_t* out;                    //   0 one past the next symbol to write (descending)
+            uint8_t* out_stop;               //   8 run whole rounds while out > out_stop
+            const uint16_t* table;           //  16
+            const uint8_t* lim;              //  24 and while the last two pointers are <= lim
             const uint8_t* p[payload_split]; //  32
-            uint64_t bits[payload_split];   // 128
+            uint64_t bits[payload_split];    // 128
         };
         static_assert(offsetof(kernel_io, p) == 32 and offsetof(kernel_io, bits) == 128 and
                       sizeof(kernel_io) == 224 and payload_split == 12);

@@ -20,7 +20,8 @@ namespace misa77
     {
         using namespace entropy;
 
-        // Readable bytes kept after every decoded stream in scratch (the merge kernels load 16 at a time).
+        // Readable bytes kept after every decoded stream in scratch (the merge kernels load 16 at a
+        // time).
         inline constexpr uint64_t stream_pad = 16;
         // Entries kept after the offsets (the commands read one, the merge kernels write some).
         inline constexpr uint64_t off_pad = merge_out_pad;
@@ -44,7 +45,10 @@ namespace misa77
             scratch() = default;
             scratch(const scratch&) = delete;
             scratch& operator=(const scratch&) = delete;
-            ~scratch() { ::operator delete(memory); }
+            ~scratch()
+            {
+                ::operator delete(memory);
+            }
 
             // `cap` = largest block length. False if there is no memory.
             bool allocate(uint64_t cap)
@@ -61,9 +65,9 @@ namespace misa77
                 // Aligned by hand: an over-aligned request of this size goes to the kernel and
                 // back on every call with glibc, a plain one is reused.
                 constexpr uint64_t align = 64;
-                memory = ::operator new(
-                    table_size + cmd_size + lit_size + planes_size + off_size + tmp_size + align,
-                    std::nothrow);
+                memory = ::operator new(table_size + cmd_size + lit_size + planes_size + off_size +
+                                            tmp_size + align,
+                                        std::nothrow);
                 if (memory == nullptr)
                     return false;
                 uint8_t* at = static_cast<uint8_t*>(memory);
@@ -135,7 +139,8 @@ namespace misa77
 
         // Merges the split offset streams back into one array.
         // - `q` = the streams' plain bytes
-        // - Writes to `off[0, off_cnt)`: negated distances `-(v + min_dis)`, in command order. Also writes `off[off_cnt]`.
+        // - Writes to `off[0, off_cnt)`: negated distances `-(v + min_dis)`, in command order. Also
+        // writes `off[off_cnt]`.
         // - Returns the smallest entry (= the largest distance, negated).
         // - PRECONDITION: `flags_ok` holds for both flag streams, and one byte is readable after
         //   every plane.
@@ -176,24 +181,29 @@ namespace misa77
             const uint8_t* const o2l = q[s_o2l];
             const uint8_t* const o2h = q[s_o2h];
             uint64_t taken = 0;
-            for_each(q[s_f2], wide_cnt, [&](uint64_t i, uint32_t bit)
-            {
-                const uint32_t narrow = uint32_t(o2l[i - taken]) | uint32_t(o2h[i - taken]) << 8;
-                wide[i] = narrow ^ ((narrow ^ three[taken]) & (0 - bit));
-                taken += bit;
-            });
+            for_each(q[s_f2],
+                     wide_cnt,
+                     [&](uint64_t i, uint32_t bit)
+                     {
+                         const uint32_t narrow = uint32_t(o2l[i - taken]) | uint32_t(o2h[i - taken])
+                                                                                << 8;
+                         wide[i] = narrow ^ ((narrow ^ three[taken]) & (0 - bit));
+                         taken += bit;
+                     });
 
             const uint8_t* const o1 = q[s_o1];
             uint32_t largest = 0;
             taken = 0;
-            for_each(q[s_f1], off_cnt, [&](uint64_t i, uint32_t bit)
-            {
-                const uint32_t narrow = o1[i - taken];
-                const uint32_t v = narrow ^ ((narrow ^ wide[taken]) & (0 - bit));
-                taken += bit;
-                largest = std::max(largest, v);
-                off[i] = -int32_t(v + uint32_t(min_dis));
-            });
+            for_each(q[s_f1],
+                     off_cnt,
+                     [&](uint64_t i, uint32_t bit)
+                     {
+                         const uint32_t narrow = o1[i - taken];
+                         const uint32_t v = narrow ^ ((narrow ^ wide[taken]) & (0 - bit));
+                         taken += bit;
+                         largest = std::max(largest, v);
+                         off[i] = -int32_t(v + uint32_t(min_dis));
+                     });
             return -int64_t(largest + min_dis);
         }
 
@@ -201,10 +211,12 @@ namespace misa77
         // Runs every command of one block.
         // - Commands at `[cp, cp_end)`, their distances at `off`, literals at `lit`.
         // - Writes to `[out, out_end)`. May write up to `max_cmd_out` bytes past `out_end`.
-        // - `r0` = the negated repeat distance carried over from previous blocks or initialised fresh.
+        // - `r0` = the negated repeat distance carried over from previous blocks or initialised
+        // fresh.
         // - `sub` = the block is a SUB block.
         // - `lit`, `out` and `r0` are updated for the caller.
-        // - Returns false if a match starts before `dst`, or if a command starts at or past `out_end`.
+        // - Returns false if a match starts before `dst`, or if a command starts at or past
+        // `out_end`.
         // - PRECONDITION: `off` has one entry per command of kind N, plus one more readable
         //   entry. `out_end - out + dec_literal_copy` bytes are readable at `lit`.
         template <class isa_lib, bool sub>
@@ -228,8 +240,8 @@ namespace misa77
                     return false;
                 // Unchecked commands: each moves `out` by `<= max_cmd_out`, so every one of
                 // these starts at or before `out_end` and writes below `out_end + max_cmd_out`.
-                const uint64_t batch = std::min(uint64_t(cp_end - cp),
-                                                uint64_t(out_end - out) / max_cmd_out + 1);
+                const uint64_t batch =
+                    std::min(uint64_t(cp_end - cp), uint64_t(out_end - out) / max_cmd_out + 1);
                 const uint8_t* const batch_end = cp + batch;
                 while (cp < batch_end)
                 {
@@ -294,7 +306,8 @@ namespace misa77
 
         // Handles one coded block.
         // - To be stored at `out[0, len)`
-        // - Block header at `p`, payloads end at or before `pend`,`src_end` is one past the last readable byte
+        // - Block header at `p`, payloads end at or before `pend`,`src_end` is one past the last
+        // readable byte
         // - Returns the block's end in the source, or null on a malformed block.
         template <class isa_lib>
         const uint8_t* decode_coded_block(const uint8_t* p,
@@ -321,13 +334,14 @@ namespace misa77
 
             const uint64_t wide_cnt = o2_cnt + o3_cnt;
             const uint64_t off_cnt = o1_cnt + wide_cnt;
-            // If these fail, they also bound every scratch buffer by `len`. If they pass, bad block.
+            // If these fail, they also bound every scratch buffer by `len`. If they pass, bad
+            // block.
             if (cmd_cnt < 1 or cmd_cnt > len or lit_cnt > len or off_cnt > cmd_cnt or
                 min_new_tok_match_len * off_cnt > len or mode > mode_sub_delta or
                 (coded >> stream_cnt) != 0) [[unlikely]]
                 return nullptr;
 
-            // block start and end 
+            // block start and end
             const uint64_t bs = uint64_t(out - dst);
             const uint64_t be = bs + len;
 
@@ -352,13 +366,21 @@ namespace misa77
 
             // stream size after we huffman decode
             const uint64_t plain_size[stream_cnt] = {
-                cmd_cnt, lit_cnt, o1_cnt, o2_cnt, o2_cnt, o3_cnt, o3_cnt, o3_cnt,
-                (off_cnt + 7) / 8, (wide_cnt + 7) / 8,
+                cmd_cnt,
+                lit_cnt,
+                o1_cnt,
+                o2_cnt,
+                o2_cnt,
+                o3_cnt,
+                o3_cnt,
+                o3_cnt,
+                (off_cnt + 7) / 8,
+                (wide_cnt + 7) / 8,
             };
 
             // stream size before we huffman decode
             uint64_t stored_size[stream_cnt];
-            
+
             for (uint32_t s = 0; s < stream_cnt; ++s)
             {
                 stored_size[s] = plain_size[s];
@@ -381,7 +403,7 @@ namespace misa77
             {
                 if (uint64_t(pend - p) < stored_size[s]) [[unlikely]]
                     return nullptr;
-                
+
                 // used in place
                 q[s] = p;
 
@@ -394,7 +416,7 @@ namespace misa77
                     // ahead, and pad
                     if (s > s_lit)
                         plane += plain_size[s] + stream_pad;
-                    
+
                     const auto kernel = [](huffman_decoder::kernel_io* io)
                     {
                         if constexpr (isa_lib::has_entropy_kernel)
@@ -407,24 +429,25 @@ namespace misa77
                     if (not huffman_decoder::decode(
                             buf, plain_size[s], p, stored_size[s], *S.table, kernel)) [[unlikely]]
                         return nullptr;
-                        
+
                     q[s] = buf;
                 }
-                
+
                 // advance anyway
                 p += stored_size[s];
             }
 
-            // The offset byte count streams must correspond exactly to the split offset byte streams.
-            if (not flags_ok(q[s_f1], off_cnt, wide_cnt) or
-                not flags_ok(q[s_f2], wide_cnt, o3_cnt)) [[unlikely]]
+            // The offset byte count streams must correspond exactly to the split offset byte
+            // streams.
+            if (not flags_ok(q[s_f1], off_cnt, wide_cnt) or not flags_ok(q[s_f2], wide_cnt, o3_cnt))
+                [[unlikely]]
                 return nullptr;
 
             // Every command of kind N has one corresponding offset
             if (count_new(q[s_cmd], cmd_cnt) != off_cnt) [[unlikely]]
                 return nullptr;
 
-            // The commands read literals 16 bytes at a time, up to `len` bytes in. 
+            // The commands read literals 16 bytes at a time, up to `len` bytes in.
             // We move raw literals too close to the end of the source so we can safely over-read.
             if (((coded >> s_lit) & 1) == 0 and
                 uint64_t(src_end - q[s_lit]) < len + dec_literal_copy)
@@ -433,12 +456,14 @@ namespace misa77
                 q[s_lit] = S.lit;
             }
 
-            // the latter is basically always true, but the kernel needs it at one specific place where it subtracts something from addresses
-            const bool use_kernel = isa_lib::has_entropy_kernel and
-                                    reinterpret_cast<uintptr_t>(dst) >= kernel_min_addr;
+            // the latter is basically always true, but the kernel needs it at one specific place
+            // where it subtracts something from addresses
+            const bool use_kernel =
+                isa_lib::has_entropy_kernel and reinterpret_cast<uintptr_t>(dst) >= kernel_min_addr;
 
             // The largest distance to a match for tokens within this block, negated.
-            // If we have farthest <= bs, no match of this block can start before `dst`, so we can get rid of certain checks while safe-decoding
+            // If we have farthest <= bs, no match of this block can start before `dst`, so we can
+            // get rid of certain checks while safe-decoding
             int64_t farthest;
             if constexpr (isa_lib::has_entropy_merge_kernel)
             {
@@ -469,9 +494,11 @@ namespace misa77
                 io.off = S.off, io.lit = lit;
                 io.out = o, io.out_end = out_end, io.dst = dst;
                 io.r0 = r0, io.table = commands.pack;
-                // No match of this block can start before `dst` if none reaches further back than the block's start.
-                // variants: (a) whether block uses SUB or not (b) whether the kernel should test if every match is from >= dst
-                const uint64_t variant = ((mode & mode_sub) ? kernel_sub : 0) | (uint64_t(-farthest) > bs ? kernel_check : 0);
+                // No match of this block can start before `dst` if none reaches further back than
+                // the block's start. variants: (a) whether block uses SUB or not (b) whether the
+                // kernel should test if every match is from >= dst
+                const uint64_t variant = ((mode & mode_sub) ? kernel_sub : 0) |
+                                         (uint64_t(-farthest) > bs ? kernel_check : 0);
                 ok = false;
                 if constexpr (isa_lib::has_entropy_kernel)
                     ok = isa_lib::entropy_kernel(&io, variant) != 0;
@@ -570,7 +597,7 @@ namespace misa77
 
             if (p >= pend) [[unlikely]]
                 return 0;
-            
+
             // stored raw
             if (p[mode_pos] & mode_stored)
             {
@@ -586,7 +613,7 @@ namespace misa77
                     not S.allocate(std::min(block_size, original_size - raw_size))) [[unlikely]]
                     return 0;
                 p = decode_coded_block<isa_lib>(p, pend, src_end, out, len, dst, r0, S);
-                    
+
                 // something went wrong
                 if (p == nullptr) [[unlikely]]
                     return 0;

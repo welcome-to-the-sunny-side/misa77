@@ -24,7 +24,7 @@ namespace misa77
         using namespace entropy;
         using namespace entropy::huffman;
         using bt_finder::match;
-        
+
         // The parse prices a command with bits + lambda * modelled decode cycles
         // lambda is in bits per 1000 cycles.
         inline constexpr uint32_t default_lambda = 48;
@@ -49,17 +49,19 @@ namespace misa77
         inline constexpr double n_base_bits = 4.5;
 
         // parse search
-        inline constexpr uint32_t arrivals = 3;  // per position, distinct by repeat distance
+        inline constexpr uint32_t arrivals = 3;   // per position, distinct by repeat distance
         inline constexpr uint32_t nice_len = 256; // a match this long is taken outright
-        inline constexpr uint32_t all_lens = 32;  // every shorter length is priced, beyond: the longest
+        inline constexpr uint32_t all_lens =
+            32; // every shorter length is priced, beyond: the longest
 
         // The encoder's window. The format allows `max_dis`, but 2^23 - 2 fills the finder's ring
         // of 2^23 slots exactly.
         inline constexpr uint32_t enc_window = (uint32_t(1) << 23) - 2;
         static_assert(enc_window <= max_dis);
 
-        // The finder's positions are 32-bit (to better fit in memory), so it sees the input through views: `view_span`
-        // bytes of blocks, after `view_history` bytes that only refill its window.
+        // The finder's positions are 32-bit (to better fit in memory), so it sees the input through
+        // views: `view_span` bytes of blocks, after `view_history` bytes that only refill its
+        // window.
         inline constexpr uint64_t view_span = uint64_t(1) << 31;
         inline constexpr uint64_t view_history = uint64_t(1) << 23;
         static_assert(view_span % block_size == 0 and view_history % block_size == 0);
@@ -74,7 +76,8 @@ namespace misa77
         inline constexpr uint32_t len_tab = 128;
         static_assert(run_tab >= 2 * max_lit and len_tab >= 2 * max_match_len);
 
-        // A block whose coded form saves less than this fraction is stored (we don't wanna trash decode in incompressible regions)
+        // A block whose coded form saves less than this fraction is stored (we don't wanna trash
+        // decode in incompressible regions)
         inline constexpr double store_gain = 0.05;
 
         // Each block's commands come from rounds of (prices from the last round's streams ->
@@ -304,8 +307,7 @@ namespace misa77
                         for (uint32_t k = 0; k < kind_cnt; ++k)
                             for (uint32_t len = 1; len <= len_tab; ++len)
                                 if (w[k][len] > 0 and M[k][len][0] < cost_inf)
-                                    a += w[k][len] *
-                                         (double(M[k][len][r]) - double(M[k][len][0]));
+                                    a += w[k][len] * (double(M[k][len][r]) - double(M[k][len][0]));
                     Ap[r] = tw > 0 ? uint32_t(std::max(0.0, a / tw)) : 0;
                 }
             }
@@ -381,8 +383,8 @@ namespace misa77
             uint32_t i = 0;
             while (i + vector_width <= max_match_len)
             {
-                const uint32_t l = uint32_t(isa_lib::lcp(isa_lib::loadvec(a + i),
-                                                         isa_lib::loadvec(b + i)));
+                const uint32_t l =
+                    uint32_t(isa_lib::lcp(isa_lib::loadvec(a + i), isa_lib::loadvec(b + i)));
                 i += l;
                 if (l < vector_width)
                     return i;
@@ -392,8 +394,7 @@ namespace misa77
             return i;
         }
 
-        template <class isa_lib>
-        struct encoder
+        template <class isa_lib> struct encoder
         {
             double lambda;
             double lamc; // cycles -> price
@@ -449,9 +450,9 @@ namespace misa77
                 uint32_t present = 0;
                 for (uint32_t a = 0; a < 256; ++a)
                     present += len[a] != 0;
-                const double tb = std::min(double(huffman_encoder::flat_table_size),
-                                           double(1 + huffman_encoder::bitmap_bytes) +
-                                               (present + 1) / 2);
+                const double tb =
+                    std::min(double(huffman_encoder::flat_table_size),
+                             double(1 + huffman_encoder::bitmap_bytes) + (present + 1) / 2);
                 // + half a byte of padding per bit string
                 const double hb = tb + double(bits) / 8.0 + double(payload_split / 2) +
                                   double(huffman_encoder::size_fields);
@@ -583,8 +584,15 @@ namespace misa77
                 co.derive();
             }
 
-            [[gnu::always_inline]] inline void ins(uint32_t q, uint32_t key, uint32_t cost, uint32_t r0, uint32_t litrun,
-                     uint32_t mlen, uint32_t mdist, uint8_t slot, uint8_t kind)
+            [[gnu::always_inline]] inline void ins(uint32_t q,
+                                                   uint32_t key,
+                                                   uint32_t cost,
+                                                   uint32_t r0,
+                                                   uint32_t litrun,
+                                                   uint32_t mlen,
+                                                   uint32_t mdist,
+                                                   uint8_t slot,
+                                                   uint8_t kind)
             {
                 if (key >= wc[q])
                     return;
@@ -622,8 +630,15 @@ namespace misa77
             }
 
             // match tokens of lengths [lo, hi] from arrival `a` at block position `i`
-            [[gnu::always_inline]] inline void relax(uint32_t i, const arrival& a, uint8_t slot, uint32_t kind, uint32_t d,
-                       uint32_t lo, uint32_t hi, uint32_t offc, bool only_longest)
+            [[gnu::always_inline]] inline void relax(uint32_t i,
+                                                     const arrival& a,
+                                                     uint8_t slot,
+                                                     uint32_t kind,
+                                                     uint32_t d,
+                                                     uint32_t lo,
+                                                     uint32_t hi,
+                                                     uint32_t offc,
+                                                     bool only_longest)
             {
                 if (lo > hi)
                     return;
@@ -654,8 +669,12 @@ namespace misa77
 
             // Byte at absolute position p is `v[p - vo]`. Returns false if the block end is
             // unreachable (cannot happen: every visited position reaches the next one).
-            bool parse(const uint8_t* v, uint32_t vo, uint32_t bs, uint32_t be,
-                       const std::vector<uint32_t>& moff, const std::vector<match>& mm,
+            bool parse(const uint8_t* v,
+                       uint32_t vo,
+                       uint32_t bs,
+                       uint32_t be,
+                       const std::vector<uint32_t>& moff,
+                       const std::vector<match>& mm,
                        uint32_t r0in)
             {
                 const uint32_t nb = be - bs;
@@ -705,7 +724,14 @@ namespace misa77
                             if (len >= nice_len and d != a.r0)
                             {
                                 const uint32_t kind = kind_of(d);
-                                relax(i, a, uint8_t(best), kind, d, len, len, new_offc(kind, d),
+                                relax(i,
+                                      a,
+                                      uint8_t(best),
+                                      kind,
+                                      d,
+                                      len,
+                                      len,
+                                      new_offc(kind, d),
                                       true);
                                 mn = std::min(mn, len);
                             }
@@ -717,11 +743,18 @@ namespace misa77
                     for (uint32_t j = 0; j < c; ++j)
                     {
                         const arrival& a = s[j];
-                        const uint32_t lc = sub ? co.lit[uint8_t(at[0] - at[-int64_t(a.r0)])]
-                                                : co.lit[at[0]];
+                        const uint32_t lc =
+                            sub ? co.lit[uint8_t(at[0] - at[-int64_t(a.r0)])] : co.lit[at[0]];
                         const uint32_t cost = a.cost + lc;
-                        ins(i + 1, cost + co.apend(a.litrun + 1), cost, a.r0, a.litrun + 1, 0, 0,
-                            uint8_t(j), k_lit);
+                        ins(i + 1,
+                            cost + co.apend(a.litrun + 1),
+                            cost,
+                            a.r0,
+                            a.litrun + 1,
+                            0,
+                            0,
+                            uint8_t(j),
+                            k_lit);
                     }
                     for (uint32_t j = 0; j < c; ++j)
                     {
@@ -860,7 +893,8 @@ namespace misa77
             }
 
             // Raw or Huffman, whichever is smaller after lambda * decode cycles
-            bool put_bytes(const std::vector<uint8_t>& s, std::vector<uint8_t>& out,
+            bool put_bytes(const std::vector<uint8_t>& s,
+                           std::vector<uint8_t>& out,
                            double* j_out = nullptr)
             {
                 const uint64_t n = s.size();
@@ -1023,7 +1057,8 @@ namespace misa77
                     if (const uint32_t sd = bprop[k])
                         for (uint32_t i = std::max((c0 + k) * cs, bs),
                                       e = std::min((c0 + k + 1) * cs, be);
-                             i < e; ++i)
+                             i < e;
+                             ++i)
                             lb[i - seg0] = uint8_t(src[i] - src[i - sd]);
 
                 const uint32_t win = enc_window;
@@ -1082,8 +1117,8 @@ namespace misa77
                 moff_delta.push_back(uint32_t(mm_delta.size()));
             }
 
-            // Writes the blocks at `out` and returns their end, nullptr on failure. Every block is at
-            // most its length + 1 bytes. PRECONDITION: `n > small_lim`
+            // Writes the blocks at `out` and returns their end, nullptr on failure. Every block is
+            // at most its length + 1 bytes. PRECONDITION: `n > small_lim`
             uint8_t* encode(const uint8_t* src, uint64_t n, uint8_t* out)
             {
                 uint32_t r0 = uint32_t(initial_dis);
@@ -1158,11 +1193,12 @@ namespace misa77
                         cur_delta = false;
                         have_costs = true;
 
-                        // the format allows a coded block only if it is not larger than stored
+                        // a coded block larger than stored would break `compressed_size_bound`
                         const uint64_t len = be - bs;
                         bool store = wbuf.size() >= len + 1;
                         if (not store)
-                            store = double(len) + 1 - double(wbuf.size()) < store_gain * double(len);
+                            store =
+                                double(len) + 1 - double(wbuf.size()) < store_gain * double(len);
                         if (store)
                         {
                             // the decoder's repeat distance does not move

@@ -103,7 +103,7 @@ namespace misa77::entropy
 } // namespace misa77::entropy
 
 #if defined(MISA77_ASM_KERNELS) && defined(__x86_64__)
-// Kernels, along with contracts, can be found in x86_64.inc. 
+// Kernels, along with contracts, can be found in x86_64.inc.
 // The AVX2 ones also need BMI1, BMI2 and LZCNT.
 // Disable C++ name mangling.
 extern "C"

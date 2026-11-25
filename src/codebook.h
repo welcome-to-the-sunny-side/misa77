@@ -180,8 +180,8 @@ namespace misa77
     {
         enum class kind : uint8_t
         {
-            R,  // match at the last distance (or no match)
-            N,  // new distance
+            R, // match at the last distance (or no match)
+            N, // new distance
         };
 
         struct entry

@@ -33,7 +33,8 @@ namespace misa77
         static constexpr int8_t default_level = 1;
         static_assert(min_level <= default_level and default_level <= max_level);
 
-        // Light levels in [min_level, heavy_lb), heavy levels in [heavy_lb, entropy_lb), entropy levels in [entropy_lb, max_level]
+        // Light levels in [min_level, heavy_lb), heavy levels in [heavy_lb, entropy_lb), entropy
+        // levels in [entropy_lb, max_level]
         static constexpr int8_t heavy_lb = 4;
         static constexpr int8_t entropy_lb = 5;
 

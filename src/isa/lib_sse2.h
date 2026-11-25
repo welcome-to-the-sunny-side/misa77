@@ -9,10 +9,10 @@
 // CONTRACT: SSE2 is guaranteed by the x86-64 ISA, so this header only requires
 // the including TU to be a genuine x86-64 baseline build (-march=x86-64).
 
-#include "format.h" // vector_width
 #include "decompressor_zoo/entropy_safe_kernels/kernel.h"
 #include "decompressor_zoo/heavy_safe_kernels/kernel.h"
 #include "decompressor_zoo/light_safe_kernels/kernel.h"
+#include "format.h" // vector_width
 
 #include <cstdint>
 #include <immintrin.h>

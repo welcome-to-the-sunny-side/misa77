@@ -64,9 +64,10 @@ namespace misa77
         uint8_t* const out_limit = dst + loop_limit;
 
         // kernel path
-        if constexpr(isa_lib::has_light_kernel)
+        if constexpr (isa_lib::has_light_kernel)
         {
-            // returns null if something goes wrong, and this results in `out != out_limit` triggering below
+            // returns null if something goes wrong, and this results in `out != out_limit`
+            // triggering below
             out = isa_lib::light_kernel(src, dst, literals, out_limit);
         }
         else
@@ -75,8 +76,8 @@ namespace misa77
 
             uint8_t* const prefix_end = dst + std::min(dis_ceil, loop_limit);
 
-            // Fully guarded step for an initial small prefix (match distance is dangerous here), and
-            // the tail
+            // Fully guarded step for an initial small prefix (match distance is dangerous here),
+            // and the tail
             auto guarded_step = [&]() -> bool
             {
                 uint8_t token = control[0];
@@ -156,7 +157,8 @@ namespace misa77
             // a match code 31 must not advance `out` past one-past-the-end of a dst buffer
             static_assert(6 + (31 + min_match_len - 1) - (red_slack + 1) <= literal_suffix);
 
-            uint8_t* const red = dst + (loop_limit > red_slack ? loop_limit - red_slack : uint64_t(0));
+            uint8_t* const red =
+                dst + (loop_limit > red_slack ? loop_limit - red_slack : uint64_t(0));
 
             // Fast main loop: no per-token guards outside the extras branch.
             while (control < literals and out < red)
@@ -191,14 +193,14 @@ namespace misa77
 
                     if (lit_len > uint64_t(literals - src)) [[unlikely]]
                         return 0;
-    #if defined(__clang__)
+#if defined(__clang__)
                     // Equivalent to the check below, rewritten in terms of `red`
                     if (lit_len - (red_slack - min_match_len) > uint64_t(red - out)) [[unlikely]]
                         return 0;
-    #else
+#else
                     if (lit_len + min_match_len > uint64_t(out_limit - out)) [[unlikely]]
                         return 0;
-    #endif
+#endif
                 }
 
                 literals -= lit_len;

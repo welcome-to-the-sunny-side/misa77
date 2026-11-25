@@ -27,7 +27,7 @@ Every bit of `flags` other than the format ID is unused and must be 0. A light s
 
 ### Small mode
 
-If `n <= small_lim`, the stream is the 8-byte header followed by the `n` original bytes, and nothing else.
+If `n <= small_lim`, the stream is the 8-byte header followed by the `n` original bytes.
 
 If `n > small_lim`, the header is followed by the layout below.
 
@@ -95,7 +95,7 @@ Bits 2-3 of `flags` indicate the "codebook" used. ID 0 is for table `codebook_a`
 
 ### Small mode
 
-If `n <= small_lim`, the stream is the 8-byte header followed by the `n` original bytes, and nothing else.
+If `n <= small_lim`, the stream is the 8-byte header followed by the `n` original bytes.
 
 If `n > small_lim`, the header is followed by one or more blocks.
 
@@ -172,7 +172,7 @@ Every bit of `flags` other than the format ID is unused and must be 0. An entrop
 
 ### Small mode
 
-If `n <= small_lim`, the stream is the 8-byte header followed by the `n` original bytes, and nothing else.
+If `n <= small_lim`, the stream is the 8-byte header followed by the `n` original bytes.
 
 If `n > small_lim`, the header is followed by the layout below.
 
