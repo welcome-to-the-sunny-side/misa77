@@ -10,7 +10,7 @@
 
 namespace misa77
 {
-    // Header (both formats): LE u64 = size | flags << flags_shift
+    // Header (all formats): LE u64 = size | flags << flags_shift
     inline constexpr uint64_t header_size = 8;
     inline constexpr uint64_t flags_shift = 56;
     inline constexpr uint64_t size_mask = (uint64_t(1) << flags_shift) - 1;
@@ -20,9 +20,9 @@ namespace misa77
     inline constexpr uint8_t format_mask = (1 << format_bits) - 1;
     inline constexpr uint8_t format_light = 0;
     inline constexpr uint8_t format_heavy = 1;
+    inline constexpr uint8_t format_entropy = 2;
 
-    // Width in bytes of several unconditional operations we perform through isa libs in both
-    // formats.
+    // Width in bytes of several unconditional operations we perform through isa libs in all 3 formats.
     inline constexpr uint64_t vector_width = 32;
 
     // light format, used by levels in [config::min_level, config::heavy_lb)
@@ -85,9 +85,15 @@ namespace misa77
         // Unconditionally copied number of literal bytes in decompressor.
         inline constexpr uint64_t dec_literal_copy = 16;
         static_assert(literal_suffix >= dec_literal_copy);
+
+        // Header, the suffix count, then `n` bytes with one extension byte per 255 at most.
+        constexpr uint64_t compressed_size_bound(uint64_t n)
+        {
+            return header_size + 8 + n + n / 255 + 16;
+        }
     } // namespace light
 
-    // heavy format, used by levels in [config::heavy_lb, config::max_level]
+    // heavy format, used by levels in [config::heavy_lb, config::entropy_lb)
     namespace heavy
     {
         // flags
@@ -337,4 +343,208 @@ namespace misa77
             return n + header_size + block_header_size * (n / min_block_output + 1);
         }
     } // namespace heavy
+
+    // entropy format, used by levels in [config::entropy_lb, config::max_level]
+    namespace entropy
+    {
+        // Every other flags bit must be 0, so this is the ONLY valid flags byte here.
+        inline constexpr uint8_t flags = format_entropy;
+
+        // Stream: [header][blocks][first `prefix_size` output bytes][last `suffix_size` output bytes]
+        // Blocks cover output positions [prefix_size, n - suffix_size).
+        inline constexpr uint64_t prefix_size = 32;
+        inline constexpr uint64_t suffix_size = 48;
+
+        // The raw bytes come last so that every block stream has this many readable bytes after
+        // it (decoders over-read).
+        inline constexpr uint64_t raw_size = prefix_size + suffix_size;
+
+        // Input sizes `<= small_lim` are stored raw: [header][bytes]
+        inline constexpr uint64_t small_lim = prefix_size + 2 * suffix_size;
+        static_assert(small_lim == 128);
+
+        // We make cuts on the input at multiples of `block_size`, and the bytes between two adjacent cuts correspond to a block (except for the first and last blocks, where the raw prefix and suffix eat in)
+        inline constexpr uint64_t block_size = uint64_t(1) << 18;
+
+        // Each block is divided into mutually exclusive and exhaustive DELTA cells of size `cell_size`.
+        // Each cell may or may not be actually delta coded (and therefore have a stride).
+        inline constexpr uint64_t cell_size = uint64_t(1) << 12;
+        static_assert(block_size % cell_size == 0);
+
+        // commands
+
+        // max literal length
+        inline constexpr uint64_t max_lit = 15;
+        inline constexpr uint64_t max_match_len = vector_width;
+
+        // Unconditionally copied number of literal bytes in decompressor.
+        inline constexpr uint64_t dec_literal_copy = 16;
+        static_assert(max_lit <= dec_literal_copy);
+
+        // stored non-negative offset `v` means distance `v + min_dis`
+        inline constexpr uint64_t min_dis = 32;
+        // max bytes required to represent an offset
+        inline constexpr uint64_t max_offset_bytes = 3;
+        inline constexpr uint64_t max_dis = (uint64_t(1) << (8 * max_offset_bytes)) - 1 + min_dis;
+
+        // A match can never overlap with where we're writing it
+        static_assert(min_dis >= max_match_len and max_match_len == vector_width);
+
+        // The repeat distance is initialised to `initial_dis` (R tokens can occur before the first N token).
+        inline constexpr uint64_t initial_dis = min_dis;
+        // its source exists at the first block's first byte
+        static_assert(initial_dis <= prefix_size);
+
+        // A command that starts `<=` a block's end writes `< suffix_size` bytes past it.
+        static_assert(max_lit + vector_width <= suffix_size);
+
+        // largest DELTA stride for a cell (stride = 0 => no delta for this cell)
+        inline constexpr uint64_t max_stride = 32;
+        // A stride's source exists from the first block's first byte.
+        static_assert(max_stride <= prefix_size);
+
+        // block
+
+        // mode byte, must be equal to one of the following values
+        inline constexpr uint8_t mode_vanilla = 0;  // entropy, no sub/delta
+        inline constexpr uint8_t mode_sub = 1;    // literals are difference coded (`s[x] = lit + s[x - repeat distance (at the time)]`)
+        inline constexpr uint8_t mode_delta = 2;  // strides follow the fixed header
+        inline constexpr uint8_t mode_stored = 4; // the block's bytes are stored raw (only valid alone)
+        inline constexpr uint8_t mode_sub_delta = mode_sub | mode_delta;
+
+        // Coded block: [mode][u24 cmd_cnt][u24 lit_cnt][u24 o1_cnt][u24 o2_cnt][u24 o3_cnt]
+        //              [u16 coded][strides (DELTA)][u24 size per coded stream][streams]
+        inline constexpr uint64_t mode_pos = 0;
+        inline constexpr uint64_t cnt_bytes = 3;
+        inline constexpr uint64_t cmd_cnt_pos = 1;
+        inline constexpr uint64_t lit_cnt_pos = cmd_cnt_pos + cnt_bytes;
+        inline constexpr uint64_t o1_cnt_pos = lit_cnt_pos + cnt_bytes;
+        inline constexpr uint64_t o2_cnt_pos = o1_cnt_pos + cnt_bytes;
+        inline constexpr uint64_t o3_cnt_pos = o2_cnt_pos + cnt_bytes;
+        // bit s set <=> stream s is Huffman coded (else raw)
+        inline constexpr uint64_t coded_pos = o3_cnt_pos + cnt_bytes;
+        inline constexpr uint64_t block_header_size = coded_pos + 2;
+        static_assert(block_header_size == 18);
+        static_assert(block_size < (uint64_t(1) << (8 * cnt_bytes)));
+
+        // Streams in the order they appear. Intermediate stuff is derived from these.
+        enum stream : uint32_t
+        {
+            s_cmd, // one byte per command
+            s_lit, // literal bytes (differences in a SUB block)
+            s_o1,  // 1-byte offsets
+            s_o2l, // 2-byte offsets, low byte
+            s_o2h,
+            s_o3l, // 3-byte offsets, low byte
+            s_o3m,
+            s_o3h,
+            s_f1, // one bit per new offset: set = 2 or 3 bytes
+            s_f2, // one bit per 2/3-byte offset: set = 3 bytes
+            stream_cnt,
+        };
+        static_assert(stream_cnt == 10);
+        // size of each coded stream
+        inline constexpr uint64_t coded_size_bytes = 3;
+
+        // A coded stream: [table in either nibble or sparse form][1st bit string][2nd bit string]...[`payload_split`'th bit string][size of each bit string but the last]
+        namespace huffman
+        {
+            // all bytes
+            inline constexpr uint32_t symbol_cnt = 1 << 8;
+
+            // We restrict to 11 so that our lookup table hopefully fits in L1
+            inline constexpr uint32_t max_code_len = 11;
+
+            // We split the stream into `payload_split` bitstrings (break serial dependencies).
+            // symbol j from a stream's end is in bit string `j % payload_split`
+            inline constexpr uint32_t payload_split = 12;
+            
+            // bytes to indicate size of each split bitstring (except the last)
+            inline constexpr uint64_t split_size_bytes = 2;
+            inline constexpr uint64_t size_fields = (payload_split - 1) * split_size_bytes;
+
+            // table byte 0
+            
+            // byte = 0 => just store a nibble for each symbol's code length
+            inline constexpr uint8_t table_flat = 0;
+            static_assert(max_code_len < (1 << 4));
+
+            // presence bitset, then a nibble per present symbol
+            inline constexpr uint8_t table_sparse = 1;
+            inline constexpr uint64_t bitmap_bytes = symbol_cnt / 8;
+            inline constexpr uint64_t flat_table_size = 1 + symbol_cnt / 2;
+
+            // a bit string's size must fit `split_size_bytes`
+            static_assert((block_size / payload_split + 1) * max_code_len / 8 + 1 <
+                          (uint64_t(1) << (8 * split_size_bytes)));
+        } // namespace huffman
+
+        // codebook
+        
+        // What the codec assumes of the codebook. 
+        // I might have missed some checks, and therefore do not recommend hot-swapping in a codebook that happens to pass the below checks...
+
+        // A command with a new distance has a match of at least this length (note: the decoder uses this in a slightly non-trivial way for scratch allocation, be careful)
+        inline constexpr uint64_t min_new_tok_match_len = 3;
+
+        constexpr bool codebook_wellformed(const entry (&cb)[codebook_size])
+        {
+            bool lit_only[max_lit + 1] = {};
+            bool cont[max_match_len + 1] = {};
+            for (uint32_t c = 0; c < codebook_size; ++c)
+            {
+                const entry& e = cb[c];
+                if (e.lit > max_lit or e.len > max_match_len or e.lit + e.len == 0)
+                    return false;
+                // kinds sit in contiguous ranges, in enum order
+                if (c > 0 and cb[c - 1].k > e.k)
+                    return false;
+                if (e.k == kind::N and e.len < min_new_tok_match_len)
+                    return false;
+                if (e.k == kind::R and e.len == 0)
+                    lit_only[e.lit] = true;
+                if (e.k == kind::R and e.lit == 0)
+                    cont[e.len] = true;
+            }
+
+            // encoder needs these for convenience
+            for (uint64_t i = 1; i <= max_lit; ++i)
+                if (not lit_only[i])
+                    return false;
+            for (uint64_t i = 1; i <= max_match_len; ++i)
+                if (not cont[i])
+                    return false;
+            return true;
+        }
+        static_assert(codebook_wellformed(codebook));
+
+        // don't waste entries
+        constexpr bool codebook_distinct(const entry (&cb)[codebook_size])
+        {
+            for (uint32_t i = 0; i < codebook_size; ++i)
+                for (uint32_t j = 0; j < i; ++j)
+                    if (cb[i].k == cb[j].k and cb[i].lit == cb[j].lit and cb[i].len == cb[j].len)
+                        return false;
+            return true;
+        }
+        static_assert(codebook_distinct(codebook));
+
+        // first cmd byte of kind N
+        constexpr uint32_t first_of_kind_n(const entry (&cb)[codebook_size])
+        {
+            uint32_t c = 0;
+            while (c < codebook_size and cb[c].k != kind::N)
+                ++c;
+            return c;
+        }
+
+        // `codebook_wellformed` enforces kinds being non-decreasing, so this implies that (code >= first_new) <=> (kind[code] == N)
+        inline constexpr uint32_t first_new = first_of_kind_n(codebook);
+
+        // Header, one mode byte per block (a block is stored when coding doesn't help).
+        constexpr uint64_t compressed_size_bound(uint64_t n)
+        {
+            return n + header_size + 1 + n / block_size;
+        }
+    } // namespace entropy
 } // namespace misa77

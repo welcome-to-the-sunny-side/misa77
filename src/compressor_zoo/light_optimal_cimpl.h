@@ -147,7 +147,7 @@ namespace misa77
         using namespace light;
         using namespace light_optimal_detail;
 
-        if (compress_bound(src_size, config()) > dst_cap)
+        if (compressed_size_bound(src_size) > dst_cap)
             return 0;
 
         auto lcp_long = [&](const uint8_t* a, const uint8_t* b, uint32_t max_len) -> uint32_t

@@ -101,7 +101,7 @@ namespace misa77
             if (given.use_default)
                 return compress(src, src_size, dst, dst_cap);
 
-            if (compress_bound(src_size, config()) > dst_cap)
+            if (compressed_size_bound(src_size) > dst_cap)
                 return 0;
 
             // Left pointer in the destination buffer (metadata and control bytes)

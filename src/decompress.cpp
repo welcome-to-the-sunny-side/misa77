@@ -48,7 +48,11 @@ namespace misa77
             return 0;
 
 #if defined(__x86_64__)
-        if (__builtin_cpu_supports("avx2"))
+        // the entropy format's AVX2 kernels also need BMI1, BMI2 and LZCNT
+        const bool entropy = (src[7] & format_mask) == format_entropy;
+        if (__builtin_cpu_supports("avx2") and
+            (not entropy or (__builtin_cpu_supports("bmi") and __builtin_cpu_supports("bmi2") and
+                             __builtin_cpu_supports("lzcnt"))))
             return decompress_avx2(src, src_size, dst, dst_cap);
         return decompress_sse2(src, src_size, dst, dst_cap);
 #elif defined(__aarch64__)

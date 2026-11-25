@@ -29,6 +29,13 @@ namespace fmt
 
     // false while the new level 4 is being ported: heavy lanes are skipped
     constexpr bool heavy_ported = true;
+    // false while level 5 is being ported: entropy lanes are skipped
+    constexpr bool entropy_ported = true;
+
+    // highest level whose compressor exists
+    constexpr int8_t top_level = entropy_ported  ? misa77::config::max_level
+                                 : heavy_ported ? int8_t(misa77::config::entropy_lb - 1)
+                                                : int8_t(misa77::config::heavy_lb - 1);
 
     // heavy (level 4) stream layout, restated here so the test does not inherit a format.h slip
     constexpr uint8_t heavy_flags_a = 0x01;
@@ -104,16 +111,18 @@ namespace
         }
 
         // --- Format routing ---------------------------------------------------
-        // The stream's flags byte must sit on the level's side of heavy_lb: light
-        // below it, heavy at or above. Levels < heavy_lb being light is what
-        // entitles them to the safe-accept branch below.
-        const bool stream_heavy = (compressed[7] & fmt::format_mask) != 0;
-        if (stream_heavy != (cfg.level >= misa77::config::heavy_lb))
+        // The format id in the flags byte must be the one the level emits:
+        // 0 light below heavy_lb, 1 heavy up to entropy_lb, 2 entropy from there.
+        const int stream_format = compressed[7] & fmt::format_mask;
+        const int level_format = cfg.level >= misa77::config::entropy_lb ? 2
+                                 : cfg.level >= misa77::config::heavy_lb ? 1
+                                                                         : 0;
+        if (stream_format != level_format)
         {
             std::fprintf(stderr,
-                         "[%s] FAIL: stream format (%s) does not match level %d\n",
+                         "[%s] FAIL: stream format id (%d) does not match level %d\n",
                          name,
-                         stream_heavy ? "heavy" : "light",
+                         stream_format,
                          int(cfg.level));
             return false;
         }
@@ -188,8 +197,7 @@ namespace
     bool run_one(const std::vector<uint8_t>& input, const char* name, Stats& stats)
     {
         bool ok = true;
-        const int8_t top_level =
-            fmt::heavy_ported ? misa77::config::max_level : int8_t(misa77::config::heavy_lb - 1);
+        const int8_t top_level = fmt::top_level;
         for (int8_t level = misa77::config::min_level; level <= top_level; ++level)
         {
             char lname[96];
@@ -540,7 +548,9 @@ namespace
     {
         std::vector<isa_entry> v;
 #if defined(__x86_64__)
-        if (__builtin_cpu_supports("avx2"))
+        // as decompress() does: the entropy format's AVX2 kernels need these too
+        if (__builtin_cpu_supports("avx2") and __builtin_cpu_supports("bmi") and
+            __builtin_cpu_supports("bmi2") and __builtin_cpu_supports("lzcnt"))
             v.push_back({"avx2", misa77::compress_avx2, misa77::decompress_avx2});
         v.push_back({"sse2", misa77::compress_sse2, misa77::decompress_sse2});
 #elif defined(__aarch64__)
@@ -562,8 +572,7 @@ namespace
     void run_cross_isa_one(const std::vector<uint8_t>& input, const char* name, Stats& stats)
     {
         const std::vector<isa_entry> isas = runnable_isas();
-        const int8_t top =
-            fmt::heavy_ported ? misa77::config::max_level : int8_t(misa77::config::heavy_lb - 1);
+        const int8_t top = fmt::top_level;
 
         for (int lvl = misa77::config::min_level; lvl <= top; ++lvl)
         {
@@ -633,6 +642,365 @@ namespace
                 ++stats.passed;
         }
     }
+    // --- Entropy format: hand-built streams ----------------------------------
+    // Test-side model of the format: commands are applied to `out` as the format defines them,
+    // and written as a coded block. Streams are raw, or Huffman coded with the code where every
+    // symbol has length 8 (so a codeword is the symbol's bits, reversed).
+    struct entropy_builder
+    {
+        using kind = misa77::entropy::kind;
+        static constexpr size_t prefix = 32, suffix = 48, block = size_t(1) << 18;
+        static constexpr size_t cell = 4096, min_dis = 32, split = 12;
+        static constexpr uint8_t sub = 1, delta = 2, stored_mode = 4;
+
+        size_t n;
+        uint32_t seed;
+        // output so far; the open block's DELTA cells hold differences until `end`
+        std::vector<uint8_t> out;
+        std::vector<uint8_t> body;
+        size_t rep = min_dis;
+
+        uint8_t mode = 0;
+        uint32_t coded = 0;
+        size_t start = 0;
+        std::vector<uint8_t> strides;
+        std::vector<uint8_t> st[10];
+        std::vector<uint8_t> f1, f2; // one flag per entry
+        uint32_t o_cnt[3] = {};
+
+        entropy_builder(size_t n_, uint32_t seed_) : n(n_), seed(seed_)
+        {
+            for (size_t i = 0; i < prefix; ++i)
+                out.push_back(prng_byte(seed));
+        }
+
+        size_t block_end() const { return std::min((out.size() / block + 1) * block, n - suffix); }
+        size_t open_end() const { return std::min((start / block + 1) * block, n - suffix); }
+
+        void begin(uint8_t mode_, uint32_t coded_, std::vector<uint8_t> strides_ = {})
+        {
+            mode = mode_, coded = coded_, start = out.size(), strides = std::move(strides_);
+            if (mode & delta)
+                strides.resize((open_end() - 1) / cell - start / cell + 1, 0);
+            for (auto& v : st)
+                v.clear();
+            f1.clear(), f2.clear();
+            o_cnt[0] = o_cnt[1] = o_cnt[2] = 0;
+        }
+
+        bool tok(kind k, uint32_t lit, uint32_t len, size_t dis = 0)
+        {
+            uint32_t c = 0;
+            for (; c < misa77::entropy::codebook_size; ++c)
+            {
+                const auto& e = misa77::entropy::codebook[c];
+                if (e.k == k and e.lit == lit and e.len == len)
+                    break;
+            }
+            // no such command, or a match from before the output
+            if (c == misa77::entropy::codebook_size or
+                (len > 0 and (k == kind::N ? dis : rep) > out.size() + lit))
+                return false;
+            st[0].push_back(uint8_t(c));
+            for (uint32_t i = 0; i < lit; ++i)
+            {
+                const uint8_t v = prng_byte(seed);
+                st[1].push_back(v);
+                out.push_back((mode & sub) ? uint8_t(v + out[out.size() - rep]) : v);
+            }
+            if (k == kind::N)
+            {
+                rep = dis;
+                const size_t v = dis - min_dis;
+                const int w = v < 256 ? 0 : v < 65536 ? 1 : 2;
+                ++o_cnt[w];
+                f1.push_back(w > 0);
+                if (w > 0)
+                    f2.push_back(w > 1);
+                const int first = w == 0 ? 2 : w == 1 ? 3 : 5;
+                for (int b = 0; b <= w; ++b)
+                    st[first + b].push_back(uint8_t(v >> (8 * b)));
+            }
+            for (uint32_t i = 0; i < len; ++i)
+                out.push_back(out[out.size() - rep]);
+            return true;
+        }
+
+        // literal-only commands up to the open block's end
+        void pad()
+        {
+            while (out.size() < open_end())
+                tok(kind::R, uint32_t(std::min<size_t>(15, open_end() - out.size())), 0);
+        }
+
+        static void put(std::vector<uint8_t>& v, uint64_t x, int bytes)
+        {
+            for (int b = 0; b < bytes; ++b)
+                v.push_back(uint8_t(x >> (8 * b)));
+        }
+
+        static std::vector<uint8_t> huffman(const std::vector<uint8_t>& plain)
+        {
+            const auto rev = [](uint8_t x)
+            {
+                uint8_t r = 0;
+                for (int b = 0; b < 8; ++b)
+                    r = uint8_t(r | (((x >> b) & 1) << (7 - b)));
+                return r;
+            };
+            std::vector<uint8_t> p(1, 0); // flat table
+            p.insert(p.end(), 128, 0x88);
+            const size_t m = plain.size();
+            std::vector<uint8_t> sizes;
+            for (size_t k = 0; k < split; ++k)
+            {
+                size_t cnt = 0;
+                for (size_t j = k; j < m; j += split, ++cnt)
+                    p.push_back(rev(plain[m - 1 - j]));
+                if (k + 1 < split)
+                    put(sizes, cnt, 2);
+            }
+            p.insert(p.end(), sizes.begin(), sizes.end());
+            return p;
+        }
+
+        void end()
+        {
+            const size_t be = out.size();
+            if (mode & delta)
+                for (size_t c0 = start / cell, c = c0; c * cell < be; ++c)
+                    if (const size_t s = strides[c - c0]; s > 0)
+                        for (size_t i = std::max(start, c * cell); i < std::min(be, (c + 1) * cell);
+                             ++i)
+                            out[i] = uint8_t(out[i] + out[i - s]);
+
+            const auto pack = [](const std::vector<uint8_t>& flags)
+            {
+                std::vector<uint8_t> v((flags.size() + 7) / 8, 0);
+                for (size_t i = 0; i < flags.size(); ++i)
+                    v[i / 8] = uint8_t(v[i / 8] | (flags[i] << (i % 8)));
+                return v;
+            };
+            st[8] = pack(f1), st[9] = pack(f2);
+
+            body.push_back(mode);
+            put(body, st[0].size(), 3);
+            put(body, st[1].size(), 3);
+            for (uint32_t c : o_cnt)
+                put(body, c, 3);
+            std::vector<uint8_t> stored[10];
+            uint32_t map = 0;
+            for (int s = 0; s < 10; ++s)
+            {
+                const bool code = ((coded >> s) & 1) and not st[s].empty();
+                stored[s] = code ? huffman(st[s]) : st[s];
+                map |= uint32_t(code) << s;
+            }
+            put(body, map, 2);
+            if (mode & delta)
+                body.insert(body.end(), strides.begin(), strides.end());
+            for (int s = 0; s < 10; ++s)
+                if ((map >> s) & 1)
+                    put(body, stored[s].size(), 3);
+            for (const auto& v : stored)
+                body.insert(body.end(), v.begin(), v.end());
+        }
+
+        void stored_block()
+        {
+            const size_t be = block_end();
+            body.push_back(stored_mode);
+            while (out.size() < be)
+            {
+                out.push_back(prng_byte(seed));
+                body.push_back(out.back());
+            }
+        }
+
+        // PRECONDITION: the blocks reach `n - suffix`
+        std::vector<uint8_t> stream()
+        {
+            while (out.size() < n)
+                out.push_back(prng_byte(seed));
+            std::vector<uint8_t> s;
+            put(s, uint64_t(n) | (uint64_t(2) << 56), 8);
+            s.insert(s.end(), body.begin(), body.end());
+            s.insert(s.end(), out.begin(), out.begin() + prefix);
+            s.insert(s.end(), out.end() - suffix, out.end());
+            return s;
+        }
+    };
+
+    void check_entropy(entropy_builder& b, bool built, const char* name, Stats& stats)
+    {
+        ++stats.total;
+        if (not built or b.out.size() != b.n - entropy_builder::suffix)
+        {
+            std::fprintf(stderr, "[entropy-handbuilt/%s] FAIL: the test's stream is wrong\n", name);
+            return;
+        }
+        const std::vector<uint8_t> s = b.stream();
+        const size_t n = b.n;
+        const std::vector<isa_entry> isas = runnable_isas();
+        std::vector<uint8_t> d(n + kMargin, kCanary);
+        for (const isa_entry& a : isas)
+        {
+            std::fill(d.begin(), d.end(), kCanary);
+            const uint64_t r = a.decompress(s.data(), s.size(), d.data(), n);
+            if (r != n or not std::equal(b.out.begin(), b.out.end(), d.begin()) or
+                not canary_intact(d, n))
+            {
+                std::fprintf(stderr,
+                             "[entropy-handbuilt/%s] FAIL (%s): returned %llu for n = %zu\n",
+                             name,
+                             a.name,
+                             static_cast<unsigned long long>(r),
+                             n);
+                return;
+            }
+            // `src_size` must be exact: one byte fewer or more is not this stream
+            std::vector<uint8_t> t(s.begin(), s.end() - 1);
+            std::vector<uint8_t> u = s;
+            u.push_back(0);
+            if (a.decompress(t.data(), t.size(), d.data(), n) != 0 or
+                a.decompress(u.data(), u.size(), d.data(), n) != 0 or
+                a.decompress(s.data(), s.size(), d.data(), n - 1) != 0)
+            {
+                std::fprintf(stderr, "[entropy-handbuilt/%s] FAIL (%s): wrong size accepted\n",
+                             name, a.name);
+                return;
+            }
+        }
+        std::printf("[entropy-handbuilt/%s] OK (%zu bytes)\n", name, n);
+        ++stats.passed;
+
+        // Corrupted and truncated copies: accept or reject, but stay inside both buffers and
+        // agree across ISAs. `m` is sized exactly so a sanitizer build sees any over-read.
+        ++stats.total;
+        uint32_t seed = 192837465u ^ uint32_t(n);
+        const auto rnd = [&seed]() -> uint32_t
+        {
+            seed = seed * 1664525u + 1013904223u;
+            return seed >> 8;
+        };
+        const int trials = n < 8192 ? 20000 : n < 100000 ? 3000 : 400;
+        std::vector<uint8_t> d2(n + kMargin, kCanary);
+        for (int trial = 0; trial < trials; ++trial)
+        {
+            std::vector<uint8_t> m = s;
+            if (trial % 4 == 3)
+                m.resize(rnd() % s.size());
+            const int flips = m.empty() ? 0 : 1 + int(rnd() % 3);
+            for (int i = 0; i < flips; ++i)
+            {
+                // bias towards the headers and the first streams
+                const size_t pos =
+                    (rnd() % 2) ? rnd() % std::min<size_t>(m.size(), 96) : rnd() % m.size();
+                m[pos] = (rnd() % 2) ? uint8_t(rnd()) : uint8_t(m[pos] ^ (1u << (rnd() % 8)));
+            }
+            std::fill(d.begin(), d.end(), kCanary);
+            const uint64_t rm = isas[0].decompress(m.data(), m.size(), d.data(), n);
+            bool ok = rm <= n and canary_intact(d, n);
+            for (size_t k = 1; ok and k < isas.size(); ++k)
+            {
+                std::fill(d2.begin(), d2.end(), kCanary);
+                const uint64_t rk = isas[k].decompress(m.data(), m.size(), d2.data(), n);
+                ok = rk == rm and canary_intact(d2, n) and
+                     (rm == 0 or std::equal(d.begin(), d.begin() + rm, d2.begin()));
+            }
+            if (not ok)
+            {
+                std::fprintf(stderr,
+                             "[entropy-mutate/%s] FAIL: trial %d returned %llu, n = %zu\n",
+                             name,
+                             trial,
+                             static_cast<unsigned long long>(rm),
+                             n);
+                return;
+            }
+        }
+        std::printf("[entropy-mutate/%s] OK (%d trials)\n", name, trials);
+        ++stats.passed;
+    }
+
+    void run_entropy_handbuilt(Stats& stats)
+    {
+        using kind = misa77::entropy::kind;
+        using eb = entropy_builder;
+        {
+            // smallest input with a block: one stored block of 49 bytes
+            eb b(129, 1);
+            b.stored_block();
+            check_entropy(b, true, "stored-49", stats);
+        }
+        {
+            eb b(300'000, 2);
+            b.stored_block();
+            b.stored_block();
+            check_entropy(b, true, "stored-two-blocks", stats);
+        }
+        // every mode, raw streams and Huffman-coded ones
+        for (const uint8_t mode : {0, 1, 2, 3})
+            for (const uint32_t coded : {0u, 0x3FFu, 0x003u})
+            {
+                eb b(20'000, 3 + mode);
+                // strides: none, 1, the largest, a few odd ones
+                std::vector<uint8_t> strides = {0, 1, 32, 3, 0};
+                b.begin(mode, coded, strides);
+                // a repeat before any new distance, a match at the minimum distance from the
+                // block's first bytes, then 1- and 2-byte offsets in mixed order
+                bool ok = b.tok(kind::R, 0, 5) and b.tok(kind::N, 0, 3, 32) and
+                          b.tok(kind::R, 4, 32) and b.tok(kind::R, 15, 0) and
+                          b.tok(kind::N, 15, 3, 47) and b.tok(kind::R, 0, 32) and
+                          b.tok(kind::R, 0, 1);
+                for (int i = 0; i < 40; ++i)
+                    ok = ok and b.tok(kind::R, 15, 0);
+                ok = ok and b.tok(kind::N, 4, 32, 287) and b.tok(kind::N, 0, 4, 288) and b.tok(kind::N, 1, 3, 40) and
+                     b.tok(kind::N, 0, 32, 700) and b.tok(kind::R, 1, 1);
+                for (int i = 0; i < 300 and ok; ++i)
+                {
+                    const size_t at = b.out.size();
+                    ok = b.tok(kind::N, 1, 3, 32 + (at * 7 + i * 131) % (at - 40)) and
+                         b.tok(kind::R, uint32_t(1 + i % 15), 0);
+                    if (i % 3 == 0)
+                        ok = ok and b.tok(kind::R, 0, uint32_t(1 + i % 32));
+                }
+                b.pad();
+                b.end();
+                char name[64];
+                std::snprintf(name, sizeof name, "mode%d/coded%03x", int(mode), unsigned(coded));
+                check_entropy(b, ok, name, stats);
+            }
+        {
+            // three blocks: coded with 3-byte offsets, stored, coded SUB + DELTA starting with a
+            // repeat (the distance carries across the stored block)
+            eb b(2 * eb::block + 30'000, 9);
+            b.begin(0, 0x3FF);
+            bool ok = true;
+            for (int i = 0; i < 6000; ++i)
+                ok = ok and b.tok(kind::R, 15, 0);
+            for (int i = 0; i < 2000 and ok; ++i)
+            {
+                const size_t at = b.out.size();
+                const size_t dis = i % 3 == 0   ? 65'568 + (i * 37) % (at - 65'600)
+                                   : i % 3 == 1 ? 288 + (i * 91) % 60'000
+                                                : 32 + i % 256;
+                ok = b.tok(kind::N, 0, 4, dis) and b.tok(kind::R, uint32_t(1 + i % 5), 0);
+            }
+            ok = ok and b.tok(kind::N, 0, 32, 70'001);
+            b.pad();
+            b.end();
+            b.stored_block();
+            b.begin(3, 0x002, std::vector<uint8_t>(8, 4));
+            ok = ok and b.tok(kind::R, 4, 32);
+            for (int i = 0; i < 500 and ok; ++i)
+                ok = b.tok(kind::N, 15, 3, 262'144 + size_t(i) * 500) and b.tok(kind::R, 0, 7);
+            b.pad();
+            b.end();
+            check_entropy(b, ok, "three-blocks", stats);
+        }
+    }
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -640,6 +1008,7 @@ int main(int argc, char** argv)
     Stats stats;
 
     run_heavy_handbuilt(stats);
+    run_entropy_handbuilt(stats);
 
     // --- Edge cases / small-mode boundary (<= small_lim is stored raw) ------
     run_one({}, "empty", stats);

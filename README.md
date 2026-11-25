@@ -1,28 +1,18 @@
-# misa77 (0.7.0)
+# misa77 (0.8.0)
 
 misa77 is an LZ-based compressor that targets the write-once, read-many niche. In particular, it aims to satisfy the following criteria:
 
-- Extremely high decompression throughput (single-threaded, and in-memory).
-- Modest compression ratios (LZ4 at high effort levels is a good reference point).
-- Constant memory use during compression, regardless of input size. No extra memory use during decompression.
+1. Extremely high decompression throughput (single-threaded, and in-memory).
+2. Modest compression ratios (LZ4 at high effort levels is a good reference point).
+3. Constant memory use during compression, regardless of input size. No extra memory use during decompression (except at level 5, which needs 1.4 MB).
 
-Slow compression is the obvious tradeoff that misa77 makes to achieve the above.
+Slow compression is the obvious tradeoff that we make to achieve the above.
 
-misa77 has six compression effort levels as of v0.7.0. For most shapes of data, encode time increases and ratio decreases with increasing level, but decompression throughput is *not* similarly monotonic. In general, level 1 offers the fastest decode throughput. More information about effort levels can be found [here](#levels).
+misa77 has seven compression effort levels as of v0.8.0. For most shapes of data, encode time increases and ratio decreases with increasing level, but decompression throughput is *not* similarly monotonic. In general, level 1 offers the fastest decode throughput. More information about effort levels can be found [here](#levels).
 
-There are two decompressor modes:
-
-- unsafe: passing invalid input to this mode is UB.
-- safe: guaranteed to exit gracefully (ie. provably terminate, and not access out-of-bounds memory or engage in any other UB) in the case of corrupt/malicious input, and is typically ~3-7% slower than unsafe on x86.
+Decompression for all levels is always safe as of v0.8.0, i.e. the decompressor is guaranteed to exit gracefully (ie. terminate, and not access out-of-bounds memory or engage in any other UB) in the case of corrupt/malicious input.
 
 ## Benchmarks
-
-Detailed results are listed ahead, but here's a terse summary:
-
-- misa77 lies on the pareto frontier for decompression throughput vs compression ratio on most shapes of data.
-- It very frequently decompresses faster even when competitors have a significantly worse ratio.
-- It is somewhat slow at compression.
-- Performance is sensitive to codegen, but even with the worst possible codegen I saw in my testing, misa77 was significantly faster than other codecs.
 
 Let's first see some cross-platform results for the [Silesia Corpus](https://sun.aei.polsl.pl//~sdeor/corpus/silesia.zip).
 
@@ -30,7 +20,7 @@ Note:
 
 1. "Ratio" ahead is equal to `((compressed size)/(original)) * 100` (so lower is better).
 2. misa77 has been merged into [lzbench](https://github.com/inikep/lzbench/) and [TurboBench](https://github.com/powturbo/TurboBench). The results below have been produced using lzbench, and can be reproduced through both benchmarking harnesses.
-3. In the tables ahead, rows are grouped by codec family, and ordered from lowest to highest effort level within each family. The misa77 default level (1) is in bold.
+3. In the tables ahead, rows are grouped by codec family, and ordered from lowest to highest effort level within each family. The recommended misa77 levels are in bold.
 
 ---
 
@@ -138,31 +128,17 @@ Details:
 
 ---
 
-
-As misa77's performance is quite "spiky" (depending on the shape of the data being compressed), a file-level breakdown for the silesia corpus yields some interesting insights into its performance. 
-
-Note: 
-
-- The visuals that follow are derived from the benchmark results at [misc/lzbench-results-archive/0.7.0/intel.txt](misc/lzbench-results-archive/0.7.0/intel.txt)
-- These results are with the same x86-64 (Intel) setup mentioned previously.
-
-### Decode speed relative to lz4
-
-At level 1, misa77 decodes faster than lz4 on all 12 files (some by huge margins). 
-
-![misa77 per-file decode speed vs lz4, levels -1 to 4, Silesia (Intel)](misc/lzbench-results-archive/0.7.0/speedup_vs_lz4.png)
-
 ### Throughput vs ratio, against popular fast-decode codecs
 
-On the compressible files, misa77 sits on the decode-throughput/ratio Pareto frontier. It decodes fastest while ~matching or beating the ratio of the other fast-LZ codecs. (`x-ray` and `sao` are exceptions as most compressors have a ratio near 1, and their decode essentially devolves to a `memcpy`).
-
-To spot misa77 in these graphs, just look for the circles near the top :)
-
-![misa77 vs other codecs: per-file decode throughput vs ratio, Silesia (Intel), levels -1 to 4](misc/lzbench-results-archive/0.7.0/pareto_silesia.png)
+[we will add some decode vs ratio graphs for silesia, and our game asset corpus]
 
 ## Levels
 
+TLDR: I recommend using one of levels 1, 4, or 5 depending on your requirements.
+
 Levels are ordered by compression effort. For most shapes of data, encode time increases and ratio decreases with increasing level, but decompression throughput is *not* similarly monotonic.
+
+[in the below table, the decode vs L1 should just use x86-64 intel numbers]
 
 | Level | Description                                             | Ratio | Encode vs L1 | Decode vs L1 | Encoder memory | Format |
 | ----- | ------------------------------------------------------- | ----- | ------------ | ------------ | -------------- | ------ |
@@ -171,12 +147,14 @@ Levels are ordered by compression effort. For most shapes of data, encode time i
 | **1**     | **default, fastest decode**                                 | 42.64 | 1x           | 100%         | 3 MB           | light  |
 | 2     | better ratio, still cheap to encode                     | 40.33 | 0.76x        | 86-87%       | 3 MB           | light  |
 | 3     | best ratio in the light format                          | 37.76 | 0.14-0.20x   | 80-86%       | 29 MB          | light  |
-| 4     | best ratio overall                                      | 32.34 | 0.03x        | 78-92%       | 71 MB          | heavy  |
+| 4     | best ratio without entropy coding                       | 32.34 | 0.03x        | 78-92%       | 71 MB          | heavy  |
+| 5     | best ratio overall (entropy-coded)                      | 24.79 | TBD          | TBD          | 164 MB         | entropy |
 
-- `Ratio` is measured on `silesia.tar` in the [Intel run](#intel-x86-64).
+- `Ratio` is as measured on `silesia.tar` in the [Intel run](#intel-x86-64).
 - The `Encode`/`Decode vs L1` columns are relative to level 1, given as the range spanned by the [Intel](#intel-x86-64) and [Apple M4 Pro](#arm64-apple-silicon) runs.
-- `Encoder memory` is the compressor's own working state (disjoint from the caller's input and output buffers). Decompression needs no working memory at all.
-- Levels -1 to 3 emit the light format and level 4 emits the heavy format (see [`docs/format.md`](docs/format.md)). Both have a safe decoder.
+- Levels -1 to 3 emit the light format, level 4 emits the heavy format and level 5 emits the entropy format (see [`docs/format.md`](docs/format.md)).
+- `Encoder memory` is the compressor's own working state (disjoint from the caller's input and output buffers).  Levels 3 to 5 need less for inputs smaller than their internal block or window, as described in [`docs/format.md`](docs/format.md) (level 5 uses about 11 MB for a 64 KB input and 50 MB for a 1 MB input). 
+- Decompression needs no working memory at levels -1 to 4, and level 5's decoder allocates 1.4 MB of scratch space per call.    
 
 ## Requirements
 
@@ -190,7 +168,7 @@ For the CLI:
 
 - The `misa` CLI needs POSIX (Linux, macOS).
 
-Note: On x86-64, AVX2/SSE2 are selected at runtime. ARM has a NEON path.
+Note: On x86-64, AVX2/SSE2 are selected at runtime. ARM has a NEON path. On x86-64 and ARM64 with GCC or Clang, the decoders use hand-written assembly kernels (you can pass `-DMISA77_ASM=OFF` to use the C++ decoders instead, but I *strongly* recommend not doing this).
 
 ## Building
 
@@ -229,7 +207,7 @@ Sample usage:
 #include <misa77/misa77.h>
 #include <vector>
 
-// compress (pick a level with misa77::config(N) with N in [-1, 4], default is 1), returns 0 on failure
+// compress (pick a level with misa77::config(N) with N in [-1, 5], default is 1), returns 0 on failure
 misa77::config cfg;
 std::vector<uint8_t> compressed(misa77::compress_bound(input_size, cfg));
 uint64_t csize = misa77::compress(input, input_size, compressed.data(), compressed.size(), cfg);
@@ -238,14 +216,14 @@ compressed.resize(csize);
 // decompress, returns original_size on success
 uint64_t original_size = misa77::decompressed_size(compressed.data());
 std::vector<uint8_t> output(misa77::decompressed_buffer_bound(original_size));
-// decompress uses the unsafe decompressor by default, pass dconfig(true) to use the safe decompressor
-uint64_t written = misa77::decompress(compressed.data(), csize, output.data(), output.size(), misa77::dconfig(true));
+// returns 0 on invalid input
+uint64_t written = misa77::decompress(compressed.data(), csize, output.data(), output.size());
 ```
 
 Two things to keep in mind:
 
 - You must size the destination buffers with `compress_bound` / `decompressed_buffer_bound`, passing `compress_bound` the same `config` you compress with (the bound depends on the level's format).
-- You must pass `misa77::dconfig(true)` to `misa77::decompress` if you want the decompressor to exit gracefully on invalid input.
+- The size you pass to `misa77::decompress` must be the exact size of the compressed stream (what `compress` returned), and not the size of the buffer holding it.
 
 The experimental modes are declared in `misa77/experimental.h`, with usage documented in comments (these keep changing frequently so I don't wanna "formally" document them here just yet). You probably shouldn't be using them anyway.
 

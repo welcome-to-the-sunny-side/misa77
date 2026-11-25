@@ -43,6 +43,14 @@ add_library(misa77
     src/decompressor_zoo/heavy_safe_kernels/kernel.h
     src/decompressor_zoo/heavy_safe_kernels/x86_64.inc
     src/decompressor_zoo/heavy_safe_kernels/aarch64.inc
+    src/decompressor_zoo/entropy_safe_dimpl.h
+    src/decompressor_zoo/entropy_safe_kernels/kernel.h
+    src/decompressor_zoo/entropy_safe_kernels/x86_64.inc
+    src/decompressor_zoo/entropy_safe_kernels/aarch64.inc
+    src/entropy/huffman_decoder.h
+    src/entropy/huffman_encoder.h
+    src/entropy/bt_finder.h
+    src/entropy/stride_estimator.h
     src/decompress_dispatch.h
     src/compressor_zoo/light_blitz_cimpl.h
     src/compressor_zoo/light_swift_cimpl.h
@@ -50,6 +58,7 @@ add_library(misa77
     src/compressor_zoo/light_keen_cimpl.h
     src/compressor_zoo/light_optimal_cimpl.h
     src/compressor_zoo/heavy_optimal_cimpl.h
+    src/compressor_zoo/entropy_optimal_cimpl.h
     src/compress_dispatch.h
     src/compress.cpp
     src/decompress.cpp
@@ -129,11 +138,14 @@ if(MISA77_ASM_ACTIVE)
             src/decompressor_zoo/light_safe_kernels/x86_64_avx2.S
             src/decompressor_zoo/light_safe_kernels/x86_64_sse2.S
             src/decompressor_zoo/heavy_safe_kernels/x86_64_avx2.S
-            src/decompressor_zoo/heavy_safe_kernels/x86_64_sse2.S)
+            src/decompressor_zoo/heavy_safe_kernels/x86_64_sse2.S
+            src/decompressor_zoo/entropy_safe_kernels/x86_64_avx2.S
+            src/decompressor_zoo/entropy_safe_kernels/x86_64_sse2.S)
     else()
         target_sources(misa77 PRIVATE
             src/decompressor_zoo/light_safe_kernels/aarch64_neon.S
-            src/decompressor_zoo/heavy_safe_kernels/aarch64_neon.S)
+            src/decompressor_zoo/heavy_safe_kernels/aarch64_neon.S
+            src/decompressor_zoo/entropy_safe_kernels/aarch64_neon.S)
     endif()
     target_compile_definitions(misa77 PRIVATE MISA77_ASM_KERNELS=1)
 endif()

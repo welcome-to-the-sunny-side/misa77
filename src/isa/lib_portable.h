@@ -82,5 +82,7 @@ namespace misa77
         // no portable kernels duh
         static constexpr bool has_light_kernel = false;
         static constexpr bool has_heavy_kernel = false;
+        static constexpr bool has_entropy_kernel = false;
+        static constexpr bool has_entropy_merge_kernel = false;
     };
 } // namespace misa77
