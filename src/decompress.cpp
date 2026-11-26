@@ -9,8 +9,21 @@
 
 #include <cstdint>
 
+#if defined(__x86_64__)
+#include <cpuid.h>
+#endif
+
 namespace misa77
 {
+#if defined(__x86_64__)
+    // `__builtin_cpu_supports("lzcnt")` is rejected by clang <= 14 and Apple clang
+    static bool has_lzcnt()
+    {
+        unsigned a, b, c, d;
+        return __get_cpuid(0x80000001, &a, &b, &c, &d) and (c & (1u << 5));
+    }
+#endif
+
     // sanity check
     static_assert(vector_width == 32);
     static_assert(light::hashtab_lag >= vector_width);
@@ -52,7 +65,7 @@ namespace misa77
         const bool entropy = (src[7] & format_mask) == format_entropy;
         if (__builtin_cpu_supports("avx2") and
             (not entropy or (__builtin_cpu_supports("bmi") and __builtin_cpu_supports("bmi2") and
-                             __builtin_cpu_supports("lzcnt"))))
+                             has_lzcnt())))
             return decompress_avx2(src, src_size, dst, dst_cap);
         return decompress_sse2(src, src_size, dst, dst_cap);
 #elif defined(__aarch64__)
