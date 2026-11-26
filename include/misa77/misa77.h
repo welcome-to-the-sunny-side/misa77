@@ -8,7 +8,7 @@
 
 // Library version
 #define MISA77_VERSION_MAJOR 0
-#define MISA77_VERSION_MINOR 7
+#define MISA77_VERSION_MINOR 8
 #define MISA77_VERSION_PATCH 0
 #define MISA77_VERSION_NUMBER                                                                      \
     (MISA77_VERSION_MAJOR * 10000 + MISA77_VERSION_MINOR * 100 + MISA77_VERSION_PATCH)
@@ -29,27 +29,18 @@ namespace misa77
     public:
         // Only integers in [min_level, max_level] are valid levels
         static constexpr int8_t min_level = -1;
-        static constexpr int8_t max_level = 4;
+        static constexpr int8_t max_level = 5;
         static constexpr int8_t default_level = 1;
         static_assert(min_level <= default_level and default_level <= max_level);
 
-        // Light levels in [min_level, heavy_lb), heavy levels in [heavy_lb, max_level]
+        // Light levels in [min_level, heavy_lb), heavy levels in [heavy_lb, entropy_lb), entropy
+        // levels in [entropy_lb, max_level]
         static constexpr int8_t heavy_lb = 4;
+        static constexpr int8_t entropy_lb = 5;
 
         int8_t level;
         config() : level(default_level) {}
         explicit config(int8_t l) : level(l) {}
-    };
-
-    // decompressor config
-    class dconfig
-    {
-    public:
-        static constexpr uint8_t default_safety = false;
-
-        bool safe;
-        dconfig() : safe(default_safety) {}
-        explicit dconfig(bool s) : safe(s) {}
     };
 
     // Upper-bound on compressed size (in bytes) for any input of size `src_size` bytes.
@@ -60,7 +51,8 @@ namespace misa77
 
     // Returns number of bytes written to `dst`, and 0 on failure.
     // `cfg.level` selects the compressor to be used. Levels below `config::heavy_lb` emit the
-    // light format, levels at or above it emit the heavy format.
+    // light format, levels in [`config::heavy_lb`, `config::entropy_lb`) emit the heavy format,
+    // and levels at or above `config::entropy_lb` emit the entropy format.
     // PRECONDITION: `src_size <= max_src_size` and
     // `config::min_level <= cfg.level <= config::max_level`
     uint64_t compress(const uint8_t* __restrict src,
@@ -81,11 +73,12 @@ namespace misa77
     uint64_t decompressed_buffer_bound(uint64_t src_size);
 
     // Returns number of bytes written to `dst`, and 0 on failure.
-    // PRECONDITION: (dcfg.safe = true) OR (`src` and `src_size` must correspond to a valid misa77
-    // stream) Passing (dcfg.safe = false) and an invalid misa77 stream is UB!
+    // If the stream in `src` doesn't correspond to a valid misa77 stream, the function terminates
+    // gracefully (no UB).
+    // `src_size` must be the exact size of the compressed stream (what `compress` returned), and
+    // not just the size of the buffer that holds it.
     uint64_t decompress(const uint8_t* __restrict src,
                         uint64_t src_size,
                         uint8_t* __restrict dst,
-                        uint64_t dst_cap,
-                        dconfig dcfg = dconfig());
+                        uint64_t dst_cap);
 } // namespace misa77

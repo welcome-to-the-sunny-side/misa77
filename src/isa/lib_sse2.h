@@ -4,11 +4,14 @@
 
 #pragma once
 
-// SSE2 (2x128-bit) copy/finder policy.
+// SSE2 (2x128-bit) helper policy.
 //
 // CONTRACT: SSE2 is guaranteed by the x86-64 ISA, so this header only requires
 // the including TU to be a genuine x86-64 baseline build (-march=x86-64).
 
+#include "decompressor_zoo/entropy_safe_kernels/kernel.h"
+#include "decompressor_zoo/heavy_safe_kernels/kernel.h"
+#include "decompressor_zoo/light_safe_kernels/kernel.h"
 #include "format.h" // vector_width
 
 #include <cstdint>
@@ -83,5 +86,56 @@ namespace misa77
             return diff ? static_cast<uint64_t>(__builtin_ctz(diff)) : 32;
 #endif
         }
+
+        // SSE2 kernels for light and heavy
+#if defined(MISA77_ASM_KERNELS)
+        static constexpr bool has_light_kernel = true;
+        static constexpr bool has_heavy_kernel = true;
+
+        static uint8_t* light_kernel(const uint8_t* src,
+                                     uint8_t* dst,
+                                     const uint8_t* literals,
+                                     uint8_t* out_limit) noexcept
+        {
+            return misa77_light_safe_kernel_sse2(src, dst, literals, out_limit);
+        }
+
+        static uint64_t heavy_kernel(heavy::kernel_io* io) noexcept
+        {
+            return misa77_heavy_safe_kernel_sse2(io);
+        }
+#else
+        static constexpr bool has_light_kernel = false;
+        static constexpr bool has_heavy_kernel = false;
+#endif
+
+        // SSE2 kernels for the entropy format
+#if defined(MISA77_ASM_KERNELS)
+        static constexpr bool has_entropy_kernel = true;
+        static constexpr bool has_entropy_merge_kernel = true;
+
+        static uint64_t entropy_kernel(entropy::kernel_io* io, uint64_t variant) noexcept
+        {
+            return misa77_entropy_safe_kernel_sse2(io, variant);
+        }
+
+        static void entropy_huffman_kernel(huffman_decoder::kernel_io* io) noexcept
+        {
+            misa77_entropy_huffman_kernel_sse2(io);
+        }
+
+        static void entropy_delta_kernel(uint8_t* b, uint8_t* e, uint64_t stride) noexcept
+        {
+            misa77_entropy_delta_kernel_sse2(b, e, stride);
+        }
+
+        static int64_t entropy_merge_kernel(entropy::merge_io* io) noexcept
+        {
+            return misa77_entropy_merge_kernel_sse2(io);
+        }
+#else
+        static constexpr bool has_entropy_kernel = false;
+        static constexpr bool has_entropy_merge_kernel = false;
+#endif
     };
 } // namespace misa77

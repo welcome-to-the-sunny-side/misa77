@@ -16,12 +16,10 @@ namespace misa77
     uint64_t compress_bound(uint64_t src_size, config cfg)
     {
         if (cfg.level < cfg.heavy_lb)
-            return uint64_t(8)   // uncompressed size
-                   + uint64_t(8) // number of trailing raw literals (>= `literal_suffix`)
-                   + src_size + (src_size / uint64_t(255)) +
-                   uint64_t(16); // compressed data length upper-bound
-        else
+            return light::compressed_size_bound(src_size);
+        if (cfg.level < cfg.entropy_lb)
             return heavy::compressed_size_bound(src_size);
+        return entropy::compressed_size_bound(src_size);
     }
 
     // Returns number of bytes written to `dst`, and 0 on failure.

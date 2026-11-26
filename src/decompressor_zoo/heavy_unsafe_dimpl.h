@@ -4,6 +4,10 @@
 
 #pragma once
 
+// NOTE: Support for unsafe decompression was removed in 0.8.0!!!
+// The following code is only preserved as a simple illustration of the hot loop of the decoder for
+// the 0.7.0 heavy format.
+
 #include "format.h"
 #include "misa77/misa77.h"
 #include "util.h"

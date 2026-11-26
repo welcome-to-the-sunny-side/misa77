@@ -35,10 +35,22 @@ add_library(misa77
     src/format.h
     src/util.h
     src/suffix/sais.h
-    src/decompressor_zoo/light_unsafe_dimpl.h
     src/decompressor_zoo/light_safe_dimpl.h
-    src/decompressor_zoo/heavy_unsafe_dimpl.h
+    src/decompressor_zoo/light_safe_kernels/kernel.h
+    src/decompressor_zoo/light_safe_kernels/x86_64.inc
+    src/decompressor_zoo/light_safe_kernels/aarch64.inc
     src/decompressor_zoo/heavy_safe_dimpl.h
+    src/decompressor_zoo/heavy_safe_kernels/kernel.h
+    src/decompressor_zoo/heavy_safe_kernels/x86_64.inc
+    src/decompressor_zoo/heavy_safe_kernels/aarch64.inc
+    src/decompressor_zoo/entropy_safe_dimpl.h
+    src/decompressor_zoo/entropy_safe_kernels/kernel.h
+    src/decompressor_zoo/entropy_safe_kernels/x86_64.inc
+    src/decompressor_zoo/entropy_safe_kernels/aarch64.inc
+    src/entropy/huffman_decoder.h
+    src/entropy/huffman_encoder.h
+    src/entropy/bt_finder.h
+    src/entropy/stride_estimator.h
     src/decompress_dispatch.h
     src/compressor_zoo/light_blitz_cimpl.h
     src/compressor_zoo/light_swift_cimpl.h
@@ -46,6 +58,7 @@ add_library(misa77
     src/compressor_zoo/light_keen_cimpl.h
     src/compressor_zoo/light_optimal_cimpl.h
     src/compressor_zoo/heavy_optimal_cimpl.h
+    src/compressor_zoo/entropy_optimal_cimpl.h
     src/compress_dispatch.h
     src/compress.cpp
     src/decompress.cpp
@@ -98,7 +111,52 @@ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
         PROPERTIES COMPILE_OPTIONS "-march=armv8-a")
 endif()
 
+# Hand-written assembly decode kernels. On by default and used wherever one exists for the
+# target; everywhere else (and with -DMISA77_ASM=OFF) the C++ decoders are used.
+# Currently: x86-64 ELF targets and AArch64 ELF / Mach-O targets, with a GNU-style compiler driver.
+option(MISA77_ASM "Use the assembly decode kernels where available" ON)
+set(MISA77_ASM_ACTIVE OFF)
+set(MISA77_ASM_ARCH "")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64" AND UNIX AND NOT APPLE)
+    set(MISA77_ASM_ARCH "x86_64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64" AND UNIX
+       AND NOT CMAKE_OSX_ARCHITECTURES MATCHES "x86_64")
+    # not for a macOS build that targets x86-64 (alone or in a universal binary)
+    set(MISA77_ASM_ARCH "aarch64")
+endif()
+if(MISA77_ASM AND MISA77_ASM_ARCH AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    include(CheckLanguage)
+    check_language(ASM)
+    if(CMAKE_ASM_COMPILER)
+        enable_language(ASM)
+        set(MISA77_ASM_ACTIVE ON)
+    endif()
+endif()
+if(MISA77_ASM_ACTIVE)
+    if(MISA77_ASM_ARCH STREQUAL "x86_64")
+        target_sources(misa77 PRIVATE
+            src/decompressor_zoo/light_safe_kernels/x86_64_avx2.S
+            src/decompressor_zoo/light_safe_kernels/x86_64_sse2.S
+            src/decompressor_zoo/heavy_safe_kernels/x86_64_avx2.S
+            src/decompressor_zoo/heavy_safe_kernels/x86_64_sse2.S
+            src/decompressor_zoo/entropy_safe_kernels/x86_64_avx2.S
+            src/decompressor_zoo/entropy_safe_kernels/x86_64_sse2.S)
+    else()
+        target_sources(misa77 PRIVATE
+            src/decompressor_zoo/light_safe_kernels/aarch64_neon.S
+            src/decompressor_zoo/heavy_safe_kernels/aarch64_neon.S
+            src/decompressor_zoo/entropy_safe_kernels/aarch64_neon.S)
+    endif()
+    target_compile_definitions(misa77 PRIVATE MISA77_ASM_KERNELS=1)
+endif()
+message(STATUS "misa77: assembly decode kernels: ${MISA77_ASM_ACTIVE}")
+
 option(MISA77_BUILD_CLI "Build the misa command-line tool" ON)
+# The CLI maps its files with POSIX calls, so it is not built on Windows.
+if(MISA77_BUILD_CLI AND WIN32)
+    message(STATUS "misa77: command-line tool: not built on Windows")
+    set(MISA77_BUILD_CLI OFF)
+endif()
 if(MISA77_BUILD_CLI)
     add_executable(misa77_cli app/misa77_cli.cpp)
     set_target_properties(misa77_cli PROPERTIES OUTPUT_NAME misa)

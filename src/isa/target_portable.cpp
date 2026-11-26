@@ -5,6 +5,7 @@
 // Built on every target.
 
 #include "compress_dispatch.h"
+#include "compressor_zoo/entropy_optimal_cimpl.h"
 #include "compressor_zoo/heavy_optimal_cimpl.h"
 #include "compressor_zoo/light_blitz_cimpl.h"
 #include "compressor_zoo/light_keen_cimpl.h"
@@ -12,10 +13,9 @@
 #include "compressor_zoo/light_optimal_cimpl.h"
 #include "compressor_zoo/light_swift_cimpl.h"
 #include "decompress_dispatch.h"
+#include "decompressor_zoo/entropy_safe_dimpl.h"
 #include "decompressor_zoo/heavy_safe_dimpl.h"
-#include "decompressor_zoo/heavy_unsafe_dimpl.h"
 #include "decompressor_zoo/light_safe_dimpl.h"
-#include "decompressor_zoo/light_unsafe_dimpl.h"
 #include "format.h"
 #include "isa/lib_portable.h"
 
@@ -41,26 +41,23 @@ namespace misa77
             return light_optimal_cimpl<lib_portable>(src, src_size, dst, dst_cap);
         else if (cfg.level == 4)
             return heavy_optimal_cimpl<lib_portable>(src, src_size, dst, dst_cap);
+        else if (cfg.level == 5)
+            return entropy_optimal_cimpl<lib_portable>(src, src_size, dst, dst_cap);
         return 0;
     }
 
     uint64_t decompress_portable(const uint8_t* __restrict src,
                                  uint64_t src_size,
                                  uint8_t* __restrict dst,
-                                 uint64_t dst_cap,
-                                 dconfig dcfg)
+                                 uint64_t dst_cap)
     {
-        // heavy
-        if ((src[7] & format_mask) != format_light)
-        {
-            if (dcfg.safe)
-                return heavy_safe_dimpl<lib_portable>(src, src_size, dst, dst_cap);
-            return heavy_unsafe_dimpl<lib_portable>(src, src_size, dst, dst_cap);
-        }
-
-        // light
-        if (dcfg.safe)
+        const uint8_t format = src[7] & format_mask;
+        if (format == format_light)
             return light_safe_dimpl<lib_portable>(src, src_size, dst, dst_cap);
-        return light_unsafe_dimpl<lib_portable>(src, src_size, dst, dst_cap);
+        if (format == format_heavy)
+            return heavy_safe_dimpl<lib_portable>(src, src_size, dst, dst_cap);
+        if (format == format_entropy)
+            return entropy_safe_dimpl<lib_portable>(src, src_size, dst, dst_cap);
+        return 0;
     }
 } // namespace misa77

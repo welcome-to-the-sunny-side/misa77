@@ -4,7 +4,7 @@
 
 #pragma once
 
-// Portable copy/finder policy.
+// Portable helper policy.
 //
 // CONTRACT: no ISA requirement, safe to include from any TU.
 
@@ -78,5 +78,11 @@ namespace misa77
             }
             return vector_width;
         }
+
+        // no portable kernels duh
+        static constexpr bool has_light_kernel = false;
+        static constexpr bool has_heavy_kernel = false;
+        static constexpr bool has_entropy_kernel = false;
+        static constexpr bool has_entropy_merge_kernel = false;
     };
 } // namespace misa77

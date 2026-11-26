@@ -81,7 +81,7 @@ namespace misa77
 
         static_assert(max_match_len >= 32);
 
-        if (compress_bound(src_size, config()) > dst_cap)
+        if (compressed_size_bound(src_size) > dst_cap)
             return 0;
 
         // Left pointer in the destination buffer (metadata and control bytes)
