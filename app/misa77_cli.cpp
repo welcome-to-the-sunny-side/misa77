@@ -11,6 +11,8 @@
 // Two file-based subcommands over the misa77 library codecs:
 //   compress    FILE          -> FILE.misa77
 //   decompress  FILE.misa77   -> FILE
+// and an in-memory benchmark that writes nothing:
+//   bench       FILE
 //
 // Compressed format: [4 byte magic "MSA7"][1 byte version][1 byte flags][raw compression stream]
 // Container version 1 = light-format payload, 3 = heavy-format payload, 4 = entropy-format payload
@@ -21,11 +23,14 @@
 #include <charconv>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <filesystem>
 #include <iostream>
+#include <memory>
+#include <new>
 #include <misa77/misa77.h>
 #include <string>
 #include <string_view>
@@ -283,18 +288,152 @@ namespace
         return orig;
     }
 
+    // ---- bench ----
+
+    // MB/s with about three significant digits, as lzbench prints it.
+    std::string speed(double bytes, double s)
+    {
+        const double v = bytes / 1e6 / std::max(s, 1e-9);
+        return fixed(v, v < 10 ? 2 : v < 100 ? 1 : 0);
+    }
+
+    // Benchmarks levels [lo, hi] on `path`, entirely in memory: nothing is written to disk and no
+    // file I/O is timed. Compression is timed over ONE pass (the high levels take minutes on a
+    // large file); decompression repeats for about `budget_s` seconds and the fastest pass
+    // counts. Every level's output is decompressed and compared with the input.
+    void bench(const std::string& path, int lo, int hi, double budget_s)
+    {
+        // read(), not mmap: every input page is resident before the first timed pass
+        const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+        if (fd < 0)
+            die("cannot open '" + path + "': " + std::strerror(errno));
+        struct stat st{};
+        if (fstat(fd, &st) != 0)
+            die("cannot stat '" + path + "': " + std::strerror(errno));
+        const uint64_t n = static_cast<uint64_t>(st.st_size);
+        if (n > misa77::max_src_size)
+            die("'" + path + "' is too large");
+
+        uint64_t cap = 0;
+        for (int l = lo; l <= hi; ++l)
+            cap = std::max(cap, misa77::compress_bound(n, misa77::config(static_cast<int8_t>(l))));
+        const uint64_t dcap = misa77::decompressed_buffer_bound(n);
+
+        // new[] without value-initialisation; the memsets below fault the pages in, so that
+        // cost stays out of the timings
+        const std::unique_ptr<uint8_t[]> src(new (std::nothrow) uint8_t[n + 1]);
+        const std::unique_ptr<uint8_t[]> comp(new (std::nothrow) uint8_t[cap]);
+        const std::unique_ptr<uint8_t[]> out(new (std::nothrow) uint8_t[dcap + 1]);
+        if (!src || !comp || !out)
+            die("not enough memory to benchmark '" + path + "'");
+        for (uint64_t got = 0; got < n;)
+        {
+            const ssize_t r = read(fd, src.get() + got, n - got);
+            if (r < 0 && errno == EINTR)
+                continue;
+            if (r <= 0)
+                die("cannot read '" + path + "': " + (r < 0 ? std::strerror(errno) : "short read"));
+            got += static_cast<uint64_t>(r);
+        }
+        close(fd);
+        std::memset(comp.get(), 0xA5, cap);
+        std::memset(out.get(), 0xA5, dcap + 1);
+
+        const std::string name = fs::path(path).filename().string();
+        for (int l = lo; l <= hi; ++l)
+        {
+            const misa77::config cfg(static_cast<int8_t>(l));
+
+            auto t0 = clk::now();
+            const uint64_t csz = misa77::compress(src.get(), n, comp.get(), cap, cfg);
+            const double comp_s = seconds_since(t0);
+            if (csz == 0)
+                die("compression failed at level " + std::to_string(l));
+
+            // A pass is `reps` decodes, so that tiny inputs are timed over a measurable span.
+            double best = 1e300, spent = 0;
+            uint64_t reps = 1;
+            bool checked = false;
+            for (int passes = 0; passes < 3 || spent < budget_s;)
+            {
+                t0 = clk::now();
+                uint64_t r = 0;
+                for (uint64_t k = 0; k < reps; ++k)
+                    r = misa77::decompress(comp.get(), csz, out.get(), dcap);
+                const double s = seconds_since(t0);
+                if (!checked)
+                {
+                    if (r != n || std::memcmp(out.get(), src.get(), n) != 0)
+                        die("round trip failed at level " + std::to_string(l));
+                    checked = true;
+                }
+                spent += s;
+                if (s < 0.02 && reps < (uint64_t(1) << 30))
+                {
+                    reps *= 2; // too short to time: not a pass
+                    continue;
+                }
+                best = std::min(best, s / double(reps));
+                ++passes;
+            }
+
+            char line[512];
+            std::snprintf(line,
+                          sizeof line,
+                          "%2d#%-14s : %10llu -> %10llu (%6.2f%%), %5s MB/s, %5s MB/s\n",
+                          l,
+                          name.c_str(),
+                          static_cast<unsigned long long>(n),
+                          static_cast<unsigned long long>(csz),
+                          n ? 100.0 * double(csz) / double(n) : 0.0,
+                          speed(double(n), comp_s).c_str(),
+                          speed(double(n), best).c_str());
+            std::cout << line << std::flush;
+        }
+    }
+
     // ---- args ----
 
-    misa77::config parse_level(std::string_view s)
+    int parse_level_int(std::string_view s, std::string_view whole)
     {
         int lvl = 0;
         const auto res = std::from_chars(s.data(), s.data() + s.size(), lvl);
         if (res.ec != std::errc() || res.ptr != s.data() + s.size() ||
             lvl < misa77::config::min_level || lvl > misa77::config::max_level)
-            die("invalid --level value '" + std::string(s) + "' (want an integer in [" +
+            die("invalid --level value '" + std::string(whole) + "' (want an integer in [" +
                 std::to_string(int(misa77::config::min_level)) + ", " +
                 std::to_string(int(misa77::config::max_level)) + "])");
-        return misa77::config(static_cast<int8_t>(lvl));
+        return lvl;
+    }
+
+    misa77::config parse_level(std::string_view s)
+    {
+        return misa77::config(static_cast<int8_t>(parse_level_int(s, s)));
+    }
+
+    // "N" or "A:B" (bench only). The ':' is searched from index 1 so a leading '-' stays a sign.
+    void parse_level_range(std::string_view s, int& lo, int& hi)
+    {
+        const size_t colon = s.find(':', 1);
+        if (colon == std::string_view::npos)
+        {
+            lo = hi = parse_level_int(s, s);
+            return;
+        }
+        lo = parse_level_int(s.substr(0, colon), s);
+        hi = parse_level_int(s.substr(colon + 1), s);
+        if (lo > hi)
+            die("invalid --level range '" + std::string(s) + "' (want A:B with A <= B)");
+    }
+
+    double parse_seconds(std::string_view s)
+    {
+        char* end = nullptr;
+        const std::string z(s);
+        const double v = std::strtod(z.c_str(), &end);
+        if (z.empty() || *end != '\0' || !(v >= 0) || v > 3600)
+            die("invalid --time value '" + z + "' (want seconds in [0, 3600])");
+        return v;
     }
 
     [[noreturn]] void usage(int code)
@@ -305,8 +444,9 @@ namespace
               "USAGE\n"
               "  misa compress    [OPTIONS] FILE     compress FILE -> FILE.misa77\n"
               "  misa decompress  [OPTIONS] FILE     decompress FILE (a .misa77) -> FILE\n"
+              "  misa bench       [OPTIONS] FILE     time FILE in memory (writes nothing)\n"
               "  misa help | misa version\n\n"
-              "COMMON OPTIONS\n"
+              "COMPRESS / DECOMPRESS OPTIONS\n"
               "  -o, --output PATH   output path (default derived from FILE)\n"
               "  -f, --force         overwrite the output without asking\n"
               "  -v, --verbose       report sizes, ratio and timing (to stderr)\n\n"
@@ -319,7 +459,16 @@ namespace
               "                      1 = faster decompression, 2 = better ratio,\n"
               "                      3 = best ratio (slow compression, good decode speed),\n"
               "                      4 = large-window format: wins on big inputs\n"
-              "                          (slow compression, good decode speed)\n";
+              "                          (slow compression, good decode speed)\n"
+              "                      5 = entropy-coded format: best ratio\n"
+              "                          (slowest compression, slower decode)\n\n"
+              "BENCH OPTIONS\n"
+              "  -l, --level N|A:B   one level, or the levels A to B         [default all]\n"
+              "  -t, --time SECONDS  decompression time budget per level     [default 3]\n"
+              "                      Prints, per level: sizes, compressed size in % of the\n"
+              "                      original, compression MB/s (one pass) and decompression\n"
+              "                      MB/s (fastest pass). Single-threaded and not pinned: for\n"
+              "                      stable numbers, pin it to a core on an idle machine.\n";
         std::exit(code);
     }
 
@@ -340,19 +489,24 @@ namespace
         enum class Cmd
         {
             Compress,
-            Decompress
+            Decompress,
+            Bench
         } which;
         if (cmd == "compress" || cmd == "c")
             which = Cmd::Compress;
         else if (cmd == "decompress" || cmd == "d" || cmd == "x")
             which = Cmd::Decompress;
+        else if (cmd == "bench" || cmd == "b")
+            which = Cmd::Bench;
         else
             die("unknown command '" + std::string(cmd) + "' (try: misa help)");
 
         std::string input, output;
         bool have_input = false, have_output = false, force = false, verbose = false;
         misa77::config cfg;
-        bool have_level = false;
+        bool have_level = false, have_time = false;
+        int bench_lo = misa77::config::min_level, bench_hi = misa77::config::max_level;
+        double bench_s = 3;
 
         for (int i = 2; i < argc; ++i)
         {
@@ -369,8 +523,12 @@ namespace
                 force = true;
             else if (s == "-v" || s == "--verbose")
                 verbose = true;
+            else if ((s == "--level" || s == "-l") && which == Cmd::Bench)
+                parse_level_range(next(s), bench_lo, bench_hi), have_level = true;
             else if (s == "--level" || s == "-l")
                 cfg = parse_level(next(s)), have_level = true;
+            else if (s == "--time" || s == "-t")
+                bench_s = parse_seconds(next(s)), have_time = true;
             else if (!s.empty() && s[0] == '-')
                 die("unknown option '" + std::string(s) + "'");
             else if (have_input)
@@ -384,8 +542,18 @@ namespace
 
         // Flags that only mean something on one codec path are errors elsewhere: silently
         // ignoring an option the user typed hides a misunderstanding.
-        if (have_level && which != Cmd::Compress)
-            die("--level applies only to 'misa compress'");
+        if (have_level && which == Cmd::Decompress)
+            die("--level applies only to 'misa compress' and 'misa bench'");
+        if (have_time && which != Cmd::Bench)
+            die("--time applies only to 'misa bench'");
+        if (which == Cmd::Bench && (have_output || force || verbose))
+            die("'misa bench' writes no file: -o, -f and -v do not apply");
+
+        if (which == Cmd::Bench)
+        {
+            bench(input, bench_lo, bench_hi, bench_s);
+            return 0;
+        }
 
         const auto t0 = clk::now();
         if (which == Cmd::Compress)
