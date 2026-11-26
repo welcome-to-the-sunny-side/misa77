@@ -16,6 +16,10 @@
 #include <fstream>
 #include <vector>
 
+#if defined(__x86_64__)
+#include <cpuid.h>
+#endif
+
 // Format constants the test deliberately targets. These mirror src/format.h;
 // the test only uses the public API, so they are duplicated here on purpose (if
 // the format changes, the interesting boundary points below move with them).
@@ -549,8 +553,11 @@ namespace
         std::vector<isa_entry> v;
 #if defined(__x86_64__)
         // as decompress() does: the entropy format's AVX2 kernels need these too
+        // (LZCNT by cpuid: old compilers reject the builtin's "lzcnt")
+        unsigned a, b, c, d;
+        const bool lzcnt = __get_cpuid(0x80000001, &a, &b, &c, &d) and (c & (1u << 5));
         if (__builtin_cpu_supports("avx2") and __builtin_cpu_supports("bmi") and
-            __builtin_cpu_supports("bmi2") and __builtin_cpu_supports("lzcnt"))
+            __builtin_cpu_supports("bmi2") and lzcnt)
             v.push_back({"avx2", misa77::compress_avx2, misa77::decompress_avx2});
         v.push_back({"sse2", misa77::compress_sse2, misa77::decompress_sse2});
 #elif defined(__aarch64__)
