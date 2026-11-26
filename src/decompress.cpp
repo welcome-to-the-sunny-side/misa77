@@ -62,14 +62,15 @@ namespace misa77
 
 #if defined(__x86_64__)
         // the entropy format's AVX2 kernels also need BMI1, BMI2 and LZCNT
+        // (we cache has_lzcnt() as it runs CPUID, which is slow and traps in a VM)
+        static const bool entropy_avx2 = __builtin_cpu_supports("bmi") and
+                                         __builtin_cpu_supports("bmi2") and has_lzcnt();
         const bool entropy = (src[7] & format_mask) == format_entropy;
-        if (__builtin_cpu_supports("avx2") and
-            (not entropy or (__builtin_cpu_supports("bmi") and __builtin_cpu_supports("bmi2") and
-                             has_lzcnt())))
+        if (__builtin_cpu_supports("avx2") and (not entropy or entropy_avx2))
             return decompress_avx2(src, src_size, dst, dst_cap);
         return decompress_sse2(src, src_size, dst, dst_cap);
 #elif defined(__aarch64__)
-        // NEON is guaranteed on Aarch64
+        // NEON is guaranteed on Aarch64    
         return decompress_neon(src, src_size, dst, dst_cap);
 #else
         return decompress_portable(src, src_size, dst, dst_cap);
